@@ -300,6 +300,7 @@ __pycache__/
 *.pt
 *.pth
 *.ckpt
+datasets/
 
 ## Visual Studio and Visual Studio Code gitignore template
 .vs/
