@@ -1,0 +1,87 @@
+# =====================================================================
+# Nimbus — single source of truth for both train.py and infer.py.
+# Every preprocessing / model / dataset value lives here exactly once.
+# =====================================================================
+
+project:
+  name: "Academy"
+  output_dir: "runs"
+  seed: 42
+
+task: "segmentation"      # "segmentation" | "classification"
+framework: "yolo"         # "yolo" | "rfdetr"  (rfdetr supports segmentation only)
+
+dataset:
+  root:  "datasets/swimnseg_yolo" # "datasets/swimnseg_yolo"   # Use dataset builder to create a YOLO-ready dataset from the original SwimNSeg and 16647156 dataset.
+  yaml_file: "data.yaml"
+  test_split: "test"
+
+model:
+  checkpoint: C:/Users/oscar/source/repos/nimbus/academy/runs/yolo/yolo26s-seg/finetune/weights/best.pt
+  # C:/Users/oscar/source/repos/nimbus/academy/runs/yolo/yolo26s-seg/finetune/weights/best.pt
+  # C:/Users/oscar/source/repos/nimbus/academy/runs/rfdetr/medium/finetune/checkpoint_best_total.pth                # set for resume / inference; null = start from the base variant below
+  yolo:
+    variant: "yolo26s-seg.pt"      # suffix decides the task: "-seg" / "-cls" / detect (default)
+    imgsz: 608
+  rfdetr:
+    variant: "medium"               # "nano" | "small" | "medium"
+    segmentation: true             # explicit task toggle requested by the spec
+
+# ---------------------------------------------------------------------
+# 3-stage progressive training schedule.
+#   Stage 1 (warmup)       — backbone frozen, head adapts to pre-extracted features.
+#   Stage 2 (intermediate) — partial unfreeze, medium-length adaptation.
+#   Stage 3 (finetune)     — fully unfrozen, LR-scheduled, native early stopping.
+# Stages 1 & 2 can exit *before* max_epochs if validation plateaus for
+# `patience` epochs (see utils/stages.py). Stage 3 has no such early-exit
+# field because it instead uses early_stopping_patience as a standard
+# early-stopping criterion to terminate the whole run.
+# ---------------------------------------------------------------------
+training:
+  batch_size: 19
+  grad_accum: 1
+  optimizer: "AdamW"
+  base_lr: 0.001
+  weight_decay: 0.0005
+  warmup_epochs: 5
+  plateau_monitor: "val_loss"
+  plateau_min_delta: 0.001
+  stages:
+    - name: "warmup"
+      max_epochs: 10
+      freeze: "backbone"      # "backbone" | "partial" | "none"
+      lr_factor: 1.0
+      patience: 10
+    - name: "intermediate"
+      max_epochs: 20
+      freeze: "partial"
+      unfreeze_fraction: 0.35  # fraction of backbone blocks (from the end) to unfreeze
+      lr_factor: 0.3
+      patience: 15
+    - name: "finetune"
+      max_epochs: 200
+      freeze: "none"
+      lr_factor: 0.05
+      scheduler: "cosine"
+      early_stopping_patience: 20
+
+# Passed straight through to the backend's native augmentation kwargs.
+augmentation:
+  mosaic: 1.0
+  copy_paste: 0.1
+  flipud: 0.3
+  fliplr: 0.5
+  degrees: 10.0
+  translate: 0.1
+  scale: 0.4
+  close_mosaic: 20
+
+inference:
+  conf_threshold: 0.25
+  imgsz: 608
+  max_overlay_images: 30
+  benchmark_warmup: 10
+  benchmark_iters: 50
+
+logging:
+  plot_every: 5
