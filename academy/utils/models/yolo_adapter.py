@@ -50,8 +50,37 @@ class YoloAdapter:
                 format="onnx",
                 imgsz=self.cfg.inference.imgsz,
                 simplify=False,  # onnxsim runs as its own later pipeline stage, not duplicated here
+                nms=True,  # bakes NMS into the graph so output0 is (1, 300, 4+1+1+nm) already top-K filtered, matching utils/benchmark/onnx_decode.py's decoder
             )
         shutil.move(str(exported), target)
+
+    def prune(self, checkpoint_path: Path, output_path: Path, amount: float) -> Path:
+        """Prune the EMA weights inside an Ultralytics checkpoint.
+
+        ``ckpt["ema"]`` is a live, already-instantiated ``nn.Module`` (Ultralytics
+        keeps ``ckpt["model"]`` as ``None`` on saved checkpoints — resume/export
+        always derive from EMA), so pruning is just: unwrap it, prune its
+        ``state_dict()``, load the pruned weights back in, save the same dict.
+        """
+        import torch
+
+        from utils.optimizers.pruner import prune_state_dict
+
+        ckpt = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
+        module = ckpt.get("ema") or ckpt.get("model")
+        if module is None:
+            raise ValueError(f"{checkpoint_path}: checkpoint has neither 'ema' nor 'model' weights to prune")
+
+        pruned_state, stats = prune_state_dict(module.state_dict(), amount)
+        module.load_state_dict(pruned_state)
+        print(
+            f"pruned {stats.pruned_params}/{stats.total_params} params "
+            f"({stats.sparsity:.1%} sparsity) across {stats.eligible_tensors} tensors"
+        )
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(ckpt, str(output_path))
+        return output_path
 
     def detect_task(self) -> str:
         return self.task

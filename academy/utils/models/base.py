@@ -8,6 +8,7 @@ never to ``ultralytics`` or ``rfdetr`` directly.
 from __future__ import annotations
 
 import abc
+from pathlib import Path
 from typing import Any
 
 
@@ -17,6 +18,18 @@ class ModelAdapter(abc.ABC):
     @abc.abstractmethod
     def export_onnx(self, target: str) -> None:
         """Export the model to ONNX format."""
+
+    @abc.abstractmethod
+    def prune(self, checkpoint_path: Path, output_path: Path, amount: float) -> Path:
+        """Magnitude-prune a checkpoint's weights, writing a new checkpoint file.
+
+        Runs before ``export_onnx`` — pruning zeroes weights inside a live
+        PyTorch checkpoint, which no longer exists as a distinct concept once
+        the graph is frozen into ONNX. Each backend stores checkpoints in an
+        incompatible shape (see the two adapters' implementations), so only the
+        unwrap/rewrap is framework-specific here; the actual pruning math is
+        shared via :func:`utils.optimizers.pruner.prune_state_dict`.
+        """
 
     @abc.abstractmethod
     def detect_task(self) -> str:
