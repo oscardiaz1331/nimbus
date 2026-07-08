@@ -84,6 +84,7 @@ class YoloModelConfig:
 class RFDETRModelConfig:
     variant: str = "small"  # "small" | "medium"
     segmentation: bool = True  # explicit task toggle requested by spec
+    export_fallback: bool = False  # use the hand-rolled ONNX wrapper instead of rfdetr's native .export()
 
 
 @dataclasses.dataclass
@@ -111,6 +112,7 @@ class InferenceConfig:
     conf_threshold: float = 0.25
     imgsz: int = 640
     max_overlay_images: int = 30
+    max_eval_images: int = 50  # test images used for the optimize-pipeline accuracy comparison; <0 = all
     benchmark_warmup: int = 10
     benchmark_iters: int = 50
 

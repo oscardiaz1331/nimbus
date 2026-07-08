@@ -151,7 +151,6 @@ def main(config_path: str, checkpoint: str | None) -> None:
     if sample_images:
         sample = cv2.imread(str(sample_images[0]))
         benchmark_fps(cfg, adapter, sample)
-    adapter.export_onnx(str(out_dir / "model.onnx"))
 
 
 if __name__ == "__main__":
