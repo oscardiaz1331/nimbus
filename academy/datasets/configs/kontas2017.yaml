@@ -1,0 +1,16 @@
+# Kontas-2017 / Zenodo 16647156 — see datasets/datasets.md for source details.
+kind: kontas
+name: kontas2017
+output_dir: datasets/16647156_yolo
+class_id: 0
+class_name: cloud
+contour_epsilon: 0.001
+min_contour_area: 0
+
+kontas:
+  root: datasets/16647156/kontas_2017
+  images_subdir: images
+  masks_subdir: seg_masks
+  validation_csv: validation.csv
+  cloud_values: [2, 3, 4]  # low/mid/high clouds -> single 'cloud' class; 0=camera mask, 1=sky are background
+  test_root: datasets/16647156/test_set  # 2021 multi-camera set: images/<camera>/*.jpg, seg_masks/<camera>/*.png

@@ -1,0 +1,20 @@
+# SWINSEG — Singapore Whole sky Nighttime Imaging SEGmentation Database.
+kind: binary_mask
+name: swinseg
+output_dir: datasets/swinseg_yolo
+class_id: 0
+class_name: cloud
+contour_epsilon: 0.001
+min_contour_area: 10
+
+binary_mask:
+  root: datasets/swinseg
+  images_subdir: images
+  masks_subdir: GTmaps
+  mask_suffixes: ["_GT.jpg", "_GT.png"]
+  image_extensions: [".jpg", ".png"]
+  split_ratios:
+    train: 0.6
+    valid: 0.2
+    test: 0.2
+  random_seed: 42

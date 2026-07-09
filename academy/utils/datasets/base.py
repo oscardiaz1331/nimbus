@@ -20,8 +20,10 @@ import yaml
 from utils.datasets.config import DatasetBuilderConfig
 
 Pair = tuple[Path, Path]  # (image_path, mask_path)
-
-SPLIT_NAMES = ("train", "val", "test")
+TRAIN_NAME = "train"
+VALID_NAME = "valid"
+TEST_NAME = "test"
+SPLIT_NAMES = (TRAIN_NAME, VALID_NAME, TEST_NAME)
 
 
 class DatasetBuilder(abc.ABC):

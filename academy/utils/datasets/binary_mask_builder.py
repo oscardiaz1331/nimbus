@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from utils.datasets.base import DatasetBuilder, Pair
+from utils.datasets.base import TRAIN_NAME, VALID_NAME, TEST_NAME, DatasetBuilder, Pair
 from utils.datasets.config import DatasetBuilderConfig
 
 
@@ -59,9 +59,9 @@ class BinaryMaskBuilder(DatasetBuilder):
 
         n = len(shuffled)
         train_end = int(n * self.ratios.train)
-        val_end = train_end + int(n * self.ratios.val)
+        val_end = train_end + int(n * self.ratios.valid)
         return {
-            "train": shuffled[:train_end],
-            "val": shuffled[train_end:val_end],
-            "test": shuffled[val_end:],
+            TRAIN_NAME: shuffled[:train_end],
+            VALID_NAME: shuffled[train_end:val_end],
+            TEST_NAME: shuffled[val_end:],
         }

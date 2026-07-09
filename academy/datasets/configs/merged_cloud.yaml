@@ -1,0 +1,15 @@
+# Fuses all three cloud-segmentation datasets: each builds its own
+# train/val/test split first, then same-named splits are combined so one
+# training batch can mix images from all of them. Meant to fix false
+# positives from training on SWIMSEG alone (more generic/uniform skies)
+# when testing against the more varied Kontas/Almeria imagery.
+kind: merge
+name: cloud_merged
+output_dir: datasets/merged_yolo
+class_id: 0
+class_name: cloud
+
+members:
+  - kontas2017.yaml
+  - swimseg.yaml
+  - swinseg.yaml

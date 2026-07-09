@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from utils.datasets.base import DatasetBuilder, Pair
+from utils.datasets.base import TRAIN_NAME, VALID_NAME, TEST_NAME, DatasetBuilder, Pair
 from utils.datasets.config import DatasetBuilderConfig
 
 VALID_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
@@ -118,7 +118,7 @@ class KontasBuilder(DatasetBuilder):
             bucket = val if image_path.stem in val_filenames else train
             bucket.append((image_path, mask_path))
 
-        splits = {"train": train, "val": val}
+        splits = {TRAIN_NAME: train, VALID_NAME: val}
         if self._test_pairs:
-            splits["test"] = self._test_pairs
+            splits[TEST_NAME] = self._test_pairs
         return splits

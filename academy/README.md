@@ -16,10 +16,24 @@ nimbus/academy/
 ├── train.py                 # 3-stage training entry point
 ├── infer.py                 # test-set evaluation + FPS benchmark
 ├── optimize.py               # ONNX export/simplify/fp16/int8/prune/benchmark/report CLI
+├── datasets/
+│   ├── datasets.md           # per-source dataset docs: authors, DOI/citation, labels, file layout
+│   ├── build_dataset.py      # single entry point for every dataset builder (config-driven)
+│   └── configs/              # one YAML per dataset source, plus merge configs
+│       ├── kontas2017.yaml
+│       ├── swimseg.yaml
+│       ├── swinseg.yaml
+│       └── merged_cloud.yaml # kind: merge — fuses the sources above into one split dataset
 ├── utils/
 │   ├── config.py             # typed Config dataclasses + YAML loader/validator
 │   ├── commons.py            # dataset I/O, segmentation/classification metrics,
 │   │                         # overlay rendering, FPS benchmarking
+│   ├── datasets/              # dataset-builder implementation behind build_dataset.py
+│   │   ├── config.py         # typed DatasetBuilderConfig + YAML loader (mirrors utils/config.py)
+│   │   ├── base.py            # shared builder scaffolding (split, write YOLO labels, etc.)
+│   │   ├── binary_mask_builder.py # builder for single binary sky/cloud mask sources (SWIMSEG/SWINSEG)
+│   │   ├── kontas_builder.py  # builder for the multi-class Kontas-2017 masks
+│   │   └── merge.py           # combines same-named splits across already-built member datasets
 │   ├── plotter.py            # one push-based TrainingPlotter shared by every backend
 │   ├── stages.py             # framework-agnostic plateau-detection / stage-advance logic
 │   ├── paths.py              # canonical artifact paths for one run's output_dir
@@ -87,6 +101,43 @@ so reusing it is both less code and less risk than reinventing it.
   `task: classification` at load time, and the adapter raises
   `NotImplementedError` if `segmentation: false` is ever set, rather
   than silently doing the wrong thing.
+
+## Datasets
+
+The raw datasets themselves are **not** distributed with this repo — you
+need to fetch and unzip each source yourself. Everything downstream of
+that (Kontas/SWIMSEG/SWINSEG grayscale or binary masks → YOLO-format
+segmentation labels, in a single per-source split or merged across
+sources) is config-driven through one entry point:
+
+```bash
+# Build a single source
+python datasets/build_dataset.py --config datasets/configs/kontas2017.yaml
+python datasets/build_dataset.py --config datasets/configs/swimseg.yaml
+python datasets/build_dataset.py --config datasets/configs/swinseg.yaml
+
+# Or build the merged dataset (kind: merge) — builds each member source's
+# own train/val/test split first, then combines same-named splits so one
+# training batch mixes images from all of them
+python datasets/build_dataset.py --config datasets/configs/merged_cloud.yaml
+```
+
+Each dataset (or merge of datasets) is described by its own YAML under
+`datasets/configs/`, loaded into a typed `DatasetBuilderConfig`
+(`utils/datasets/config.py`) the same way `config.yaml` drives
+`train.py`/`infer.py`/`optimize.py`. `kind: kontas` and `kind:
+binary_mask` each point at wherever you've unzipped that source's
+images/masks (`root`, `images_subdir`, `masks_subdir`, ...) and are
+handled by their own builder (`kontas_builder.py`,
+`binary_mask_builder.py`); `kind: merge` instead lists `members:` — the
+YAML files of already-defined sources to fuse into one `output_dir`.
+Switching between a single-source and a merged dataset, or pointing at
+a different unzip location, is a config-only change — no code edits.
+
+Where to get each source, its authors/citation, class labels, and exact
+on-disk file layout is documented per-dataset in
+[`datasets/datasets.md`](datasets/datasets.md) — read that before
+downloading anything.
 
 ## Usage
 

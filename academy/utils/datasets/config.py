@@ -17,11 +17,11 @@ VALID_KINDS = {"kontas", "binary_mask", "merge"}
 @dataclasses.dataclass
 class SplitRatios:
     train: float = 0.6
-    val: float = 0.2
+    valid: float = 0.2
     test: float = 0.2
 
     def __post_init__(self) -> None:
-        total = self.train + self.val + self.test
+        total = self.train + self.valid + self.test
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"split ratios must sum to 1.0, got {total}")
 
@@ -43,8 +43,6 @@ class KontasSourceConfig:
     validation_csv: str = "validation.csv"
     cloud_values: tuple[int, ...] = (2, 3, 4)
     test_root: str | None = None
-    test_images_subdir: str = "images"
-    test_masks_subdir: str = "seg_masks"
 
 
 @dataclasses.dataclass
