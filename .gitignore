@@ -291,6 +291,14 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Runtime state (SQLite DB + all-sky images written by observatory)
+web/data/
+
+# Frontend build artifacts (Node runs only on the dev PC)
+web/frontend/node_modules/
+web/frontend/dist/
+
+
 ## Train folder gitignore
 runs/
 __pycache__/

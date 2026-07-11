@@ -1,0 +1,104 @@
+# =====================================================================
+# Nimbus Web — single source of truth for the API server, storage,
+# external data providers, and the dashboard layout.
+#
+# Loaded into typed dataclasses by server/config.py (validates at load
+# time). Relative paths are resolved against this file's directory.
+# =====================================================================
+
+server:
+  host: "0.0.0.0"               # bind on all interfaces so LAN clients reach the Pi
+  port: 8080
+  static_dir: "frontend/dist"   # built SPA; if missing the server runs API-only (dev)
+
+storage:
+  db_path: "data/nimbus.db"     # SQLite, WAL mode; created on first start
+  images_dir: "data/images"     # all-sky images/masks written here by observatory
+
+stations:                       # declared here, seeded into the DB at startup (upsert)
+  - id: "observatory-01"
+    name: "All-sky camera"
+    latitude: 41.4549
+    longitude:  2.2307
+    elevation_m: 62
+
+providers:                      # external data sources, cache-first (server/providers/)
+  open-meteo:
+    enabled: true
+    ttl_seconds: 900            # hit the external API at most every 15 min
+    latitude: 41.4549           # forecast point (usually same as the station)
+    longitude:  2.2307
+  astronomy:                    # computed locally with astral — no network needed
+    enabled: true
+    ttl_seconds: 900
+    latitude: 41.4549
+    longitude:  2.2307
+    elevation_m: 667
+  rain-viewer:                  # precipitation radar frame index (tiles load in-browser)
+    enabled: true
+    ttl_seconds: 600
+
+dashboard:
+  title: "Nimbus"
+  refresh_seconds: 30           # widget polling interval (SSE is an open item)
+  ambient: true                 # full-page weather effects (rain/sun/clouds/stars)
+  sections:                     # observatory-style pages; each is its own widget
+                                # grid. enabled: false hides a widget but keeps
+                                # its entry. A widget type may appear in several
+                                # sections (instances are independent).
+    - id: "overview"
+      title: "Dashboard"
+      icon: "🏠"
+      layout:
+        - { type: "current-conditions",  title: "Cloud cover now",         span: 1 }
+        - { type: "allsky-image",        title: "Latest all-sky image",    span: 1 }
+        - { type: "astronomy",           title: "Sun & Moon",              span: 1 }
+        - { type: "system-status",       title: "System",                  span: 1 }
+        - { type: "history-chart",       title: "Cloud cover history",     span: 2,
+            props: { hours: 24, bucket: "10m" } }
+        - { type: "forecast-chart",      title: "Next 48 h — clouds & rain", span: 2 }
+
+    - id: "sky"
+      title: "Sky"
+      icon: "☁️"
+      layout:
+        - { type: "allsky-image",        title: "All-sky + AI segmentation", span: 2 }
+        - { type: "timelapse",           title: "Timelapse",               span: 2,
+            props: { frames: 48, fps: 4 } }
+        - { type: "cloud-classes",       title: "Cloud classes",           span: 1 }
+        - { type: "history-chart",       title: "Cloud cover history",     span: 3,
+            props: { hours: 24, bucket: "10m" } }
+        - { type: "raw-observations",    title: "Raw observations",        span: 4,
+            props: { limit: 12 } }
+
+    - id: "weather"
+      title: "Weather"
+      icon: "🌦️"
+      layout:
+        - { type: "rain-map",            title: "Precipitation radar",     span: 2,
+            props: { zoom: 7, height: 340 } }
+        - { type: "forecast-chart",      title: "Next 48 h — clouds & rain", span: 2 }
+        - { type: "open-meteo-forecast", title: "Forecast (Open-Meteo)",   span: 4,
+            props: { maxHours: 16 } }
+
+    - id: "astronomy"
+      title: "Astronomy"
+      icon: "🌙"
+      layout:
+        - { type: "astronomy",           title: "Sun & Moon",              span: 1 }
+        - { type: "orrery",              title: "Earth · Moon · Sun",      span: 3,
+            props: { view: "daynight" } }
+
+    - id: "lora"
+      title: "LoRa"
+      icon: "📡"
+      layout:
+        - { type: "lora-nodes",          title: "Node status",             span: 1,
+            props: { staleSeconds: 900, offlineSeconds: 3600 } }
+        - { type: "lora-link-chart",     title: "Link quality",            span: 3 }
+
+    - id: "system"
+      title: "System"
+      icon: "⚙️"
+      layout:
+        - { type: "system-status",       title: "Raspberry Pi",            span: 2 }

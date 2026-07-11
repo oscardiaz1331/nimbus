@@ -1,0 +1,513 @@
+/* Theme tokens (light/dark via prefers-color-scheme). Chart roles follow the
+   validated reference palette; text always wears text tokens, never series color. */
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --series-1: #2a78d6;
+  --series-1-band: rgba(42, 120, 214, 0.16);
+  --series-2: #1baf7a;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --error: #d03b3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --series-1: #3987e5;
+    --series-1-band: rgba(57, 135, 229, 0.22);
+    --series-2: #199e70;
+    --error: #e66767;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Cards sit above the ambient effects layer (z-index 0, see Ambient.svelte) */
+header,
+nav,
+main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Section navigation (observatory-style pages) */
+nav {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+nav a:hover {
+  border-color: var(--baseline);
+}
+
+nav a.active {
+  background: var(--surface);
+  border-color: var(--baseline);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 0.25rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+header .subtitle {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  padding: 1rem 1.25rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.cell {
+  min-width: 0; /* let grid items shrink instead of overflowing */
+}
+
+@media (max-width: 900px) {
+  main {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  .cell {
+    grid-column: 1 / -1 !important; /* overrides the inline span on phones */
+  }
+}
+
+/* Shared widget card */
+.widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.widget .body {
+  flex: 1;
+  min-height: 0;
+}
+
+.error {
+  color: var(--error);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 0.15rem 0;
+}
+
+.footer {
+  margin-top: 0.6rem;
+}
+
+/* Stat tile (hero number stays in ink, not series color) */
+.big-number {
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* Compact data table (forecast) */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+table.data th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--baseline);
+}
+
+table.data th:first-child,
+table.data td:first-child {
+  text-align: left;
+}
+
+table.data td {
+  text-align: right;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--gridline);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--baseline);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* All-sky image */
+.allsky {
+  position: relative;
+}
+
+.allsky img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.allsky img.mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.allsky-toggle {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.allsky-toggle input[type='range'] {
+  flex: 1;
+  accent-color: var(--series-1);
+}
+
+/* Small button row inside widgets (chart ranges, node selector) */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.range-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--baseline);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.range-btn.active {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  font-weight: 600;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.chart-label {
+  margin: 0.4rem 0 0.1rem;
+}
+
+/* Horizontal bar list (cloud classes) */
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+}
+
+.bar-label {
+  width: 6.5rem;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.bar-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--gridline);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--series-1);
+}
+
+.bar-val {
+  width: 2.8rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Key/value list (astronomy, system status) */
+dl.kv {
+  margin: 0;
+  font-size: 0.85rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+}
+
+dl.kv dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+dl.kv dd {
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.astro-moon {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.astro-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.astro-phase {
+  font-weight: 650;
+}
+
+/* LoRa node rows: status is dot + word, never color alone */
+.node-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.node-row:last-child {
+  border-bottom: none;
+}
+
+.node-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-id {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.node-battery {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot.online {
+  background: var(--status-good);
+}
+
+.dot.stale {
+  background: var(--status-warning);
+}
+
+.dot.offline {
+  background: var(--status-critical);
+}
+
+/* Rain map */
+.rain-map {
+  width: 100%;
+  border-radius: 6px;
+  z-index: 0; /* keep Leaflet panes under the page chrome */
+}
+
+.map-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.map-controls input[type='range'] {
+  flex: 1;
+  accent-color: var(--series-1);
+}
+
+.map-btn {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 0.15rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.map-time {
+  min-width: 5.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data a {
+  color: var(--series-1);
+}
+
+/* Orrery */
+.orrery-canvas {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+}
+
+.orrery-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.orrery-svg .svg-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+.orrery-svg .svg-label-accent {
+  fill: var(--series-2);
+}
+
+.orrery-drag {
+  cursor: grab;
+  touch-action: none; /* let pointer events drive the globe on touchscreens */
+}
+
+.orrery-drag:active {
+  cursor: grabbing;
+}
+
+/* Time-travel slider */
+.timebar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.timebar input[type='range'] {
+  flex: 1;
+  accent-color: var(--series-1);
+}
+
+.timebar .tlabel {
+  min-width: 3.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* uPlot chrome: recessive grid/axes, legend row doubles as hover readout */
+.u-legend {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.u-legend .u-marker {
+  border-radius: 2px;
+}
