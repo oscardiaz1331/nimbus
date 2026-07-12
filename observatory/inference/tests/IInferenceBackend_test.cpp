@@ -1,0 +1,38 @@
+#include "observatory/inference/IInferenceBackend.hpp"
+
+#include <gtest/gtest.h>
+
+#include <type_traits>
+#include <vector>
+
+#include "observatory/inference/Tensor.hpp"
+
+namespace observatory::inference {
+namespace {
+
+class StubInferenceBackend final : public IInferenceBackend {
+ public:
+  void run(const std::vector<Tensor>& input, std::vector<Tensor>& output) override {
+    ++run_calls_;
+    output = input;
+  }
+
+  int run_calls_ = 0;
+};
+
+TEST(IInferenceBackend, IsAbstract) {
+  static_assert(std::is_abstract_v<IInferenceBackend>,
+                "IInferenceBackend must stay a pure abstract interface");
+}
+
+TEST(IInferenceBackend, StubSatisfiesContract) {
+  StubInferenceBackend backend;
+  const std::vector<Tensor> input{Tensor("x", {4}, TensorDataType::kFloat32)};
+  std::vector<Tensor> output;
+  backend.run(input, output);
+  EXPECT_EQ(backend.run_calls_, 1);
+  EXPECT_EQ(output.size(), 1U);
+}
+
+}  // namespace
+}  // namespace observatory::inference
