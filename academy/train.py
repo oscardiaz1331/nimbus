@@ -40,7 +40,7 @@ def main(config_path: str) -> None:
     adapter = get_adapter(cfg)
     panels = SEG_PANELS if cfg.task == "segmentation" else CLS_PANELS
     model_name = (
-        cfg.model.yolo.variant[:-3]
+        cfg.model.yolo.variant
         if cfg.framework == "yolo"
         else cfg.model.rfdetr.variant
     )

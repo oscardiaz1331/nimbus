@@ -76,7 +76,7 @@ class DatasetConfig:
 
 @dataclasses.dataclass
 class YoloModelConfig:
-    variant: str = "yolo11m-seg.pt"
+    variant: str = "yolo11m-seg"
     imgsz: int = 608
 
 

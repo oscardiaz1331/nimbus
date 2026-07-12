@@ -17,7 +17,7 @@ from pathlib import Path
 
 import yaml
 
-from utils.datasets.base import SPLIT_NAMES
+from utils.datasets.base import SPLIT_DICT
 from utils.datasets.config import DatasetBuilderConfig
 
 
@@ -28,14 +28,14 @@ def merge_datasets(
 
     output_dir = Path(config.output_dir)
     dirs = {}
-    for split in SPLIT_NAMES:
-        img_dir = output_dir / split / "images"
-        lbl_dir = output_dir / split / "labels"
+    for split_name, split_folder in SPLIT_DICT.items():
+        img_dir = output_dir / split_folder / "images"
+        lbl_dir = output_dir / split_folder / "labels"
         img_dir.mkdir(parents=True, exist_ok=True)
         lbl_dir.mkdir(parents=True, exist_ok=True)
-        dirs[split] = (img_dir, lbl_dir)
+        dirs[split_name] = (img_dir, lbl_dir)
 
-    stats = {split: 0 for split in SPLIT_NAMES}
+    stats = {split: 0 for split in SPLIT_DICT.keys()}
     for member_config in member_configs:
         builder = get_builder(member_config)
         print(f"[{config.name}] member '{member_config.name}' -> merged output directly")
@@ -45,10 +45,10 @@ def merge_datasets(
         for split_name, count in member_stats.items():
             stats[split_name] += count
 
-    used_splits = [split for split in SPLIT_NAMES if stats[split] > 0]
+    used_splits = {split_name: split_folder for split_name, split_folder in SPLIT_DICT.items() if stats[split_name] > 0}
     yaml_dict = {
         "path": str(output_dir.resolve()),
-        **{split: f"{split}/images" for split in used_splits},
+        **{split_name: f"{split_folder}/images" for split_name, split_folder in used_splits.items()},
         "nc": 1,
         "names": {config.class_id: config.class_name},
     }
@@ -57,7 +57,7 @@ def merge_datasets(
         yaml.dump(yaml_dict, f, sort_keys=False)
 
     print(f"\n[{config.name}] merge complete:")
-    for split in SPLIT_NAMES:
+    for split in SPLIT_DICT.keys():
         print(f"  {split:5s}: {stats[split]} samples (merged)")
     print(f"  data.yaml -> {yaml_path}")
     return stats

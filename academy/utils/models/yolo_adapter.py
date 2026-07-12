@@ -1,7 +1,5 @@
-"""Ultralytics YOLO backend: segmentation or classification, selected
-automatically from the checkpoint filename (e.g. ``*-seg.pt`` vs
-``*-cls.pt``), implementing the shared :class:`~utils.models.base.ModelAdapter`
-interface.
+"""Ultralytics YOLO backend: segmentation or classification, implementing
+the shared :class:`~utils.models.base.ModelAdapter` interface.
 """
 
 from __future__ import annotations
@@ -18,22 +16,6 @@ from utils.plotter import TrainingPlotter
 from utils.stages import StageAction, StageController
 
 
-def detect_yolo_task(model_path: str) -> str:
-    """Infer the YOLO task from the checkpoint filename.
-
-    # Ponytail: a naive suffix heuristic ("-seg" / "-cls"), good enough
-    # because Ultralytics names its own official checkpoints this way.
-    # If you point this at a custom-named checkpoint, rename it to match
-    # the convention, or extend this function with an explicit override.
-    """
-    name = Path(model_path).stem.lower()
-    if "-seg" in name or name.endswith("seg"):
-        return "segment"
-    if "-cls" in name or name.endswith("cls"):
-        return "classify"
-    return "detect"
-
-
 class YoloAdapter:
     """Adapter exposing the shared ModelAdapter interface for Ultralytics."""
 
@@ -41,9 +23,13 @@ class YoloAdapter:
         from ultralytics import YOLO
 
         self.cfg = config
-        self.checkpoint_path = config.model.checkpoint or config.model.yolo.variant
+        self.checkpoint_path = config.model.checkpoint or config.model.yolo.variant + ".pt"
         self.model = YOLO(self.checkpoint_path)
-        self.task = detect_yolo_task(self.checkpoint_path)
+        # Ultralytics derives this from the checkpoint's actual architecture
+        # (guess_model_task), not its filename -- unlike a "-seg"/"-cls"
+        # suffix heuristic, it's correct even for arbitrarily-named checkpoints
+        # (e.g. config.yaml's model.checkpoint override).
+        self.task = self.model.task or "detect"
 
     def export_onnx(self, target: str) -> None:
         exported = self.model.export(
@@ -156,7 +142,7 @@ class YoloAdapter:
             project=str(
                 Path(self.cfg.output_dir)
                 / self.cfg.framework
-                / self.cfg.model.yolo.variant[:-3]
+                / self.cfg.model.yolo.variant
             ),
             name=stage.name,
             exist_ok=True,

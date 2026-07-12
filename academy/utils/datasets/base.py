@@ -21,9 +21,12 @@ from utils.datasets.config import DatasetBuilderConfig
 
 Pair = tuple[Path, Path]  # (image_path, mask_path)
 TRAIN_NAME = "train"
-VALID_NAME = "valid"
+TRAIN_FOLDER = "train"
+VALID_NAME = "val"
+VALID_FOLDER = "valid"
 TEST_NAME = "test"
-SPLIT_NAMES = (TRAIN_NAME, VALID_NAME, TEST_NAME)
+TEST_FOLDER = "test"
+SPLIT_DICT: dict[str, str] = {TRAIN_NAME : TRAIN_FOLDER, VALID_NAME : VALID_FOLDER, TEST_NAME : TEST_FOLDER}
 
 
 class DatasetBuilder(abc.ABC):
@@ -45,7 +48,7 @@ class DatasetBuilder(abc.ABC):
 
     @abc.abstractmethod
     def split(self, pairs: list[Pair]) -> dict[str, list[Pair]]:
-        """Partition pairs into named splits (subset of ``SPLIT_NAMES``)."""
+        """Partition pairs into named splits (subset of ``SPLIT_DICT``)."""
 
     # ---- shared pipeline ---------------------------------------------------
 
@@ -103,20 +106,20 @@ class DatasetBuilder(abc.ABC):
 
         return bool(label_lines)
 
-    def make_split_dirs(self, split_names) -> dict[str, tuple[Path, Path]]:
+    def make_split_dirs(self, SPLIT_DICT) -> dict[str, tuple[Path, Path]]:
         dirs = {}
-        for split in split_names:
-            img_dir = self.output_dir / split / "images"
-            lbl_dir = self.output_dir / split / "labels"
+        for split_name, split_folder in SPLIT_DICT.items():
+            img_dir = self.output_dir / split_folder / "images"
+            lbl_dir = self.output_dir / split_folder / "labels"
             img_dir.mkdir(parents=True, exist_ok=True)
             lbl_dir.mkdir(parents=True, exist_ok=True)
-            dirs[split] = (img_dir, lbl_dir)
+            dirs[split_name] = (img_dir, lbl_dir)
         return dirs
 
-    def write_dataset_yaml(self, split_names) -> Path:
+    def write_dataset_yaml(self, SPLIT_DICT) -> Path:
         yaml_dict = {
             "path": str(self.output_dir.resolve()),
-            **{split: f"{split}/images" for split in split_names},
+            **{split_name: f"{split_folder}/images" for split_name, split_folder in SPLIT_DICT.items()},
             "nc": 1,
             "names": {self.cfg.class_id: self.cfg.class_name},
         }

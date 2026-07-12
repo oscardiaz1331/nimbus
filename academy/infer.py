@@ -135,11 +135,11 @@ def main(config_path: str, checkpoint: str | None) -> None:
 
     adapter = get_adapter(cfg)
     variant_name = (
-        cfg.model.yolo.variant[:-3]
+        cfg.model.yolo.variant
         if cfg.framework == "yolo"
         else cfg.model.rfdetr.variant
     )
-    out_dir = Path(cfg.output_dir) / "test_eval" / cfg.framework / variant_name
+    out_dir = Path(cfg.output_dir)  / cfg.framework / variant_name / "test_eval"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if cfg.task == "segmentation":

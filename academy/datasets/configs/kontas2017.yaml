@@ -5,7 +5,7 @@ output_dir: datasets/16647156_yolo
 class_id: 0
 class_name: cloud
 contour_epsilon: 0.001
-min_contour_area: 0
+min_contour_area: 10
 
 kontas:
   root: datasets/16647156/kontas_2017
