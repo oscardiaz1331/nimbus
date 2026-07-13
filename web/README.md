@@ -10,6 +10,42 @@ the dashboard keeps working when the internet doesn't. An optional ambient
 layer paints the page with the current weather — rain drops, drifting
 clouds, sun glow, or stars.
 
+## Screenshots
+
+**Dashboard** — cloud cover now, latest all-sky frame with AI-mask slider,
+sun/moon summary, Pi system health, 24 h history and 48 h forecast in one
+overview page:
+
+![Dashboard overview](assets/dashboard.png)
+
+**Sky** — all-sky image + segmentation, per-class cloud breakdown, cloud
+cover history (24 h/7 d/30 d) and raw observations:
+
+![Sky section](assets/sky.png)
+
+**Weather** — precipitation radar (Leaflet + RainViewer) and the Open-Meteo
+hourly forecast table:
+
+![Weather section](assets/weather.png)
+
+**Astronomy** — the `orrery` widget's three views, all client-side math:
+day/night Mollweide map, draggable 3D Earth–Moon globe, and Earth's orbit
+around the Sun.
+
+| Day / Night | Earth – Moon | Orbit |
+|---|---|---|
+| ![Day/night terminator map](assets/day-and-night.png) | ![Earth–Moon globe](assets/earth-moon.png) | ![Earth orbit view](assets/orbit.png) |
+
+**LoRa** — node status (online/stale/offline, battery) and RSSI/SNR link
+quality history per node:
+
+![LoRa section](assets/lora.png)
+
+**System** — Raspberry Pi health (CPU, RAM, disk, uptime) and provider
+cache ages:
+
+![System section](assets/system.png)
+
 ```
 web/
 ├── config.yaml               # single source of truth: server, storage, stations,
