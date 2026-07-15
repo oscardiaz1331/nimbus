@@ -103,7 +103,10 @@ class AstronomyProvider(Provider):
                 "hours": darkness_hours,
             },
             "moon": {
-                "phase_days": round(phase_days, 1),
+                # astral's domain is [0, 28); rounding 27.96 to 28.0 would
+                # leak out of it, so wrap the rounded value back (28.0 ≡ 0.0,
+                # both "new moon").
+                "phase_days": round(phase_days, 1) % 28.0,
                 "illumination": illumination,
                 "phase_name": phase_name,
                 "icon": phase_icon,

@@ -82,9 +82,11 @@ web/
 │       │                         #   bundled once, used by the orrery widget
 │       ├── lib/
 │       │   ├── api.js        # fetch wrapper + polling
-│       │   ├── format.js     # percent / time formatting
+│       │   ├── format.js     # percent / time / countdown formatting
 │       │   ├── ambient.js    # weather-code -> ambient effect decision
-│       │   └── astro.js      # offline sun/moon/orbit math (Meeus, low precision)
+│       │   ├── astro.js      # offline sun/moon/orbit math (Meeus, low precision)
+│       │   └── events.js     # yearly sky events: meteor showers (by solar
+│       │                     #   longitude), equinoxes/solstices, apsides, moons
 │       └── widgets/
 │           ├── registry.js   # widget type -> component map
 │           ├── Widget.svelte # shared card frame (title/loading/error)
@@ -223,7 +225,7 @@ ephemeris locally with `astral` and still benefits from the TTL cache.
 | `rain-map` | Leaflet + OSM + RainViewer radar animation | yes (tiles) |
 | `cloud-classes` | per-class cloud breakdown from `classes` | no |
 | `timelapse` | replay of the recent all-sky frames | no |
-| `orrery` | day/night Mollweide map, draggable per-pixel 3D Earth–Moon globe (real axial tilt, real lunar orbital position, no separate "Sun" object — only true terminator shading), orbit view; time sliders ±24 h / ±6 months — all client-side math | no |
+| `orrery` | day/night Mollweide map (per-pixel twilight shading, centred on the station's meridian), draggable per-pixel 3D Earth–Moon globe (real axial tilt, real lunar orbital position, no separate "Sun" object — only true terminator shading), and an orbit view with month ticks, the year's sky events (meteor showers at their solar-longitude peaks, equinoxes/solstices, perihelion/aphelion) pinned to the orbit plus an upcoming-events countdown panel; time sliders ±24 h / ±12 months — all client-side math | no |
 | `raw-observations` | raw observation rows table | no |
 | `system-status` | Pi CPU/RAM/temp/uptime, disk, DB, cache ages, last_seen | no |
 

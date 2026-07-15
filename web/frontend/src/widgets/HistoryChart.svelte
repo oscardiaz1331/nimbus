@@ -130,7 +130,10 @@
       </button>
     {/each}
     <span class="spacer"></span>
-    <a class="range-btn" href={csvHref()} download>CSV ↓</a>
+    <!-- href refreshed at click time: the render-time timestamp goes stale
+         on a dashboard left open, silently cutting recent rows out -->
+    <a class="range-btn" href={csvHref()} download
+      onclick={(e) => (e.currentTarget.href = csvHref())}>CSV ↓</a>
   </div>
   {#if !hasChart}
     {#if error}
