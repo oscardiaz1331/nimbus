@@ -25,7 +25,7 @@ interfaces; swapping models or backends is a config change, not a recompile.
 # repo until there's an actual reason — YAGNI.
 
 ## Stack
-- C++20+, RAII, modern idioms.
+- C++23, RAII, modern idioms.
 - Patterns: Strategy, Factory, Builder, Dependency Injection.
 - Eigen, OpenCV, ONNX Runtime (primary — CPU + CUDA EP now, TensorRT EP later).
 - CUDA backend when available.

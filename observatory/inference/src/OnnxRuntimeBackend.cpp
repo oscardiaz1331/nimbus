@@ -1,21 +1,22 @@
 #include "observatory/inference/OnnxRuntimeBackend.hpp"
 
-#include <onnxruntime_cxx_api.h>
-
 #include <array>
 #include <filesystem>
 #include <format>
+#include <iostream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
 
+#include <onnxruntime_cxx_api.h>
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
-#include <iostream>
 
 namespace observatory::inference
 {
@@ -33,17 +34,19 @@ namespace observatory::inference
     inline static constexpr std::string_view kDllSuffix = ".so";
 #endif
 
-    std::string dll_name(const std::string_view base_name)
+    /// @brief Builds the platform-specific shared library file name for
+    ///   `base_name` (e.g. "cuda" -> "libonnxruntime_providers_cuda.so").
+    std::string DllName(const std::string_view base_name)
     {
       return std::format("{}{}{}", kDllPrefix, base_name, kDllSuffix);
     }
 
-    /// @brief  Maps an InferenceBackendType to the registration name used
-    ///   in register_execution_providers(). Empty for the values that don't
+    /// @brief Maps an InferenceBackendType to the registration name used in
+    ///   Impl::RegisterExecutionProviders(). Empty for the values that don't
     ///   pin a specific registered library (kOnnxRuntimeBest picks
     ///   automatically, kOnnxRuntimeCPU needs no registration, and
-    ///   kTensorRT/kOpenVINO aren't ONNX Runtime EPs at all).
-    constexpr std::string_view ep_registration_name(const InferenceBackendType ep_type)
+    ///   kTensorRT / kOpenVINO aren't ONNX Runtime EPs at all).
+    constexpr std::string_view EpRegistrationName(const InferenceBackendType ep_type)
     {
       switch (ep_type)
       {
@@ -58,11 +61,11 @@ namespace observatory::inference
       }
     }
 
-    /// @brief  Whether `ep_type` is one this ONNX Runtime backend can honor.
-    ///   kTensorRT/kOpenVINO name backends that don't go through ONNX
-    ///   Runtime's EP mechanism at all (a future TensorRTBackend/
+    /// @brief Whether `ep_type` is one this ONNX Runtime backend can honor.
+    /// @details kTensorRT / kOpenVINO name backends that don't go through
+    ///   ONNX Runtime's EP mechanism at all (a future TensorRTBackend /
     ///   OpenVINOBackend would handle those directly).
-    constexpr bool is_onnx_runtime_backend_type(const InferenceBackendType ep_type)
+    constexpr bool IsOnnxRuntimeBackendType(const InferenceBackendType ep_type)
     {
       switch (ep_type)
       {
@@ -77,11 +80,11 @@ namespace observatory::inference
       }
     }
 
-    /// @brief  Returns the absolute path to the currently running executable.
-    /// @details  Windows uses GetModuleFileNameW; everything else reads the
-    ///   /proc/self/exe symlink (Linux). Throws std::runtime_error if the path
-    ///   cannot be determined.
-    std::filesystem::path get_executable_path()
+    /// @brief Returns the absolute path to the currently running executable.
+    /// @details Windows uses GetModuleFileNameW; everything else reads the
+    ///   /proc/self/exe symlink (Linux).
+    /// @throws std::runtime_error if the path cannot be determined.
+    std::filesystem::path GetExecutablePath()
     {
 #if defined(_WIN32)
       std::wstring buffer(MAX_PATH, L'\0');
@@ -89,7 +92,7 @@ namespace observatory::inference
       {
         const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
         if (length == 0)
-          throw std::runtime_error("get_executable_path: GetModuleFileNameW failed");
+          throw std::runtime_error("GetExecutablePath: GetModuleFileNameW failed");
 
         if (length < buffer.size())
         {
@@ -103,57 +106,97 @@ namespace observatory::inference
       std::error_code ec;
       auto path = std::filesystem::read_symlink("/proc/self/exe", ec);
       if (ec)
-        throw std::runtime_error("get_executable_path: failed to read /proc/self/exe: " + ec.message());
+        throw std::runtime_error("GetExecutablePath: failed to read /proc/self/exe: " + ec.message());
       return path;
 #endif
     }
 
   } // namespace
 
-  // Holds every ONNX Runtime type. Defined only here so OnnxRuntimeBackend.hpp
-  // never has to include onnxruntime_cxx_api.h.
+  /// @brief Holds every ONNX Runtime type used by OnnxRuntimeBackend.
+  /// @details Defined only here (pImpl idiom) so OnnxRuntimeBackend.hpp never
+  ///   has to include onnxruntime_cxx_api.h.
   struct OnnxRuntimeBackend::Impl
   {
+    /// @copydoc OnnxRuntimeBackend::OnnxRuntimeBackend
     Impl(const std::string &model_path, InferenceBackendType ep_type);
 
-    void run(const std::vector<Tensor> &input, std::vector<Tensor> &output);
+    /// @copydoc OnnxRuntimeBackend::run
+    void Run(const std::vector<Tensor> &input, std::vector<Tensor> &output);
 
   private:
-    void register_execution_providers();
-    void select_execution_provider(Ort::SessionOptions &session_options, InferenceBackendType ep_type);
+    /// @brief Registers every execution provider library shipped next to the
+    ///   executable with `env_`. Missing or unloadable libraries are logged
+    ///   and skipped rather than treated as fatal, since not every deployment
+    ///   ships every EP (e.g. a CPU-only Pi image won't have CUDA's .so).
+    void RegisterExecutionProviders();
 
-    void preprocess(const std::vector<Tensor> &input, std::vector<Tensor> &output);
-    void postprocess(std::vector<Tensor> &output);
+    /// @brief Configures `session_options` for `ep_type`: either an ONNX
+    ///   Runtime auto EP-selection policy, or a session pinned to the
+    ///   specific device(s) registered for `ep_type`.
+    /// @throws std::runtime_error if `ep_type` is not an ONNX Runtime backend
+    ///   type, or no device is found for its execution provider.
+    void SelectExecutionProvider(Ort::SessionOptions &session_options, InferenceBackendType ep_type);
 
-    /// @brief  Checks if the given model file is a valid ONNX model file.
-    /// @details  Checks if the given model file exists and has a .onnx extension.
+    /// @brief Builds this frame's input/output Ort::Value tensors from
+    ///   `input`/`output`, staging CPU->device copies where needed, and
+    ///   binds them all into frame_slot_.io_binding ahead of Run().
+    /// @param[in] input Preprocessed input tensors, one per model input.
+    /// @param[in,out] output Pre-shaped output tensors; not written yet here
+    ///   (that happens in Postprocess(), after the model has actually run).
+    /// @throws std::runtime_error if the backend isn't initialized.
+    /// @throws std::invalid_argument if `input`/`output` are empty or don't
+    ///   match the model's input/output count.
+    void Preprocess(const std::vector<Tensor> &input, std::vector<Tensor> &output);
+
+    /// @brief Copies device-resident outputs back into the caller's `output`
+    ///   Tensors after Run() has produced them. Outputs already bound
+    ///   directly to the caller's buffer need nothing further.
+    void Postprocess(std::vector<Tensor> &output);
+
+    /// @brief Checks if the given model file is a valid ONNX model file.
+    /// @details Checks if the given model file exists and has a .onnx extension.
     /// @param[in] model_file The path to the model file to check.
     /// @return True if the file is a valid ONNX model file, false otherwise.
-    static bool is_model_file_valid(const std::filesystem::path &model_file);
+    static bool IsModelFileValid(const std::filesystem::path &model_file);
 
-    static ONNXTensorElementDataType to_onnx_element_type(const TensorDataType dtype);
+    /// @brief Maps a backend-agnostic TensorDataType to its ONNX Runtime
+    ///   equivalent.
+    /// @throws std::logic_error if `dtype` has no known mapping.
+    static ONNXTensorElementDataType ToOnnxElementType(const TensorDataType dtype);
 
-    static Ort::Value create_ort_value(const OrtMemoryInfo *mem_info, Tensor &tensor);
+    /// @brief Wraps `tensor`'s existing buffer as a non-owning Ort::Value at
+    ///   `mem_info`, without copying or allocating.
+    static Ort::Value CreateOrtValue(const OrtMemoryInfo *mem_info, Tensor &tensor);
 
-    static inline OrtFileString toOrtFileString(const std::filesystem::path &path)
+    static inline OrtFileString ToOrtFileString(const std::filesystem::path &path)
     {
       const std::string string(path.string());
       return {string.begin(), string.end()};
     }
-    static inline bool needs_staged_copy(const Ort::ConstMemoryInfo &mem_info)
+
+    /// @brief Whether a tensor at `mem_info` lives in memory the caller can't
+    ///   write to/read from directly, and therefore needs a staged
+    ///   CPU<->device Ort::Value plus an explicit CopyTensor.
+    static inline bool NeedsStagedCopy(const Ort::ConstMemoryInfo &mem_info)
     {
       return mem_info.GetDeviceType() != OrtMemoryInfoDeviceType_CPU &&
              mem_info.GetDeviceMemoryType() == OrtDeviceMemoryType_DEFAULT;
     }
 
-    static inline OrtSyncStreamImpl *sync_stream_impl(const Ort::SyncStream &stream)
+    /// @brief Retrieves the OrtSyncStreamImpl backing `stream`, needed to
+    ///   create OrtSyncNotificationImpl objects for it.
+    /// @throws std::runtime_error if the EP doesn't expose one for `stream`.
+    static inline OrtSyncStreamImpl *GetSyncStreamImpl(const Ort::SyncStream &stream)
     {
       const OrtSyncStreamImpl *impl = Ort::GetEpApi().SyncStream_GetImpl(stream);
       if (impl == nullptr)
-        throw std::runtime_error("sync_stream_impl: EP does not expose an OrtSyncStreamImpl for this stream");
+        throw std::runtime_error("GetSyncStreamImpl: EP does not expose an OrtSyncStreamImpl for this stream");
       return const_cast<OrtSyncStreamImpl *>(impl);
     }
 
+    /// @brief Deleter for OrtSyncNotificationImpl, so it can be owned by a
+    ///   std::unique_ptr instead of manually calling Release().
     struct SyncNotificationDeleter
     {
       void operator()(OrtSyncNotificationImpl *notification) const noexcept
@@ -164,28 +207,36 @@ namespace observatory::inference
     };
     using SyncNotificationPtr = std::unique_ptr<OrtSyncNotificationImpl, SyncNotificationDeleter>;
 
-    static inline SyncNotificationPtr create_notification(OrtSyncStreamImpl *stream_impl)
+    /// @brief Creates a reusable OrtSyncNotificationImpl for `stream_impl`,
+    ///   used to synchronize between upload/compute/download streams (see
+    ///   upload_notification_, compute_notification_, download_notification_).
+    static inline SyncNotificationPtr CreateNotification(OrtSyncStreamImpl *stream_impl)
     {
       OrtSyncNotificationImpl *raw = nullptr;
       Ort::ThrowOnError(stream_impl->CreateNotification(stream_impl, &raw));
       return SyncNotificationPtr(raw);
     }
 
-    // TODO: convert to N-buffered ring for cross-frame pipelining once camera/
-    // exists and the benchmark module shows upload/download is the bottleneck.
+    /// @brief The Ort::IoBinding and Ort::Value objects for one in-flight
+    ///   frame. Owns the Ort::Value objects bound into io_binding, so they
+    ///   outlive the Preprocess() call that creates them, through
+    ///   session_->Run() in Run().
+    /// @todo Convert to an N-buffered ring for cross-frame pipelining once
+    ///   camera/ exists and the benchmark module shows upload/download is the
+    ///   bottleneck.
     struct FrameSlot
     {
       std::unique_ptr<Ort::IoBinding> io_binding{nullptr};
       std::vector<Ort::Value> input_tensors{}, output_tensors{};
     };
 
-    // Precomputed once per input/output index at construction time (mem_info
-    // and its allocator never change between frames) instead of re-resolved
-    // on every preprocess()/postprocess() call.
+    /// @brief Precomputed once per input/output index at construction time
+    ///   (a tensor's mem_info and allocator never change between frames),
+    ///   instead of re-resolved on every Preprocess()/Postprocess() call.
     struct TensorPlan
     {
-      bool staged;                    // true: needs a CPU<->device copy through a staged Ort::Value.
-      OrtAllocator *device_allocator;  // only valid if staged == true.
+      bool staged;                     ///< True: needs a CPU<->device copy through a staged Ort::Value.
+      OrtAllocator *device_allocator;  ///< Only valid if staged == true.
     };
 
     std::unique_ptr<Ort::Env> env_;
@@ -197,6 +248,10 @@ namespace observatory::inference
     std::vector<Ort::ConstMemoryInfo> output_memory_info_;
     std::vector<TensorPlan> input_plan_;
     std::vector<TensorPlan> output_plan_;
+    // Separate streams for the CPU->device upload, the compute (Run()) step,
+    // and the device->CPU download, so each can be synchronized against the
+    // others independently. See upload_notification_/compute_notification_/
+    // download_notification_ below for how they're stitched together.
     std::unique_ptr<Ort::SyncStream> upload_stream_;
     SyncNotificationPtr upload_notification_;
     std::unique_ptr<Ort::SyncStream> compute_stream_;
@@ -212,14 +267,14 @@ namespace observatory::inference
   {
     if (!env_)
       throw std::runtime_error("OnnxRuntimeBackend: failed to create Ort::Env");
-    if (!is_onnx_runtime_backend_type(ep_type))
+    if (!IsOnnxRuntimeBackendType(ep_type))
       throw std::runtime_error("OnnxRuntimeBackend: InferenceBackendType is not an ONNX Runtime backend type");
-    if (!is_model_file_valid(model_path))
+    if (!IsModelFileValid(model_path))
       throw std::runtime_error("OnnxRuntimeBackend: \"" + model_path + "\" is not a valid .onnx file");
-    register_execution_providers();
+    RegisterExecutionProviders();
     Ort::SessionOptions session_options;
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    select_execution_provider(session_options, ep_type);
+    SelectExecutionProvider(session_options, ep_type);
     session_ = std::make_unique<Ort::Session>(*env_, model_path.c_str(), session_options);
     if (session_->GetInputCount() == 0 || session_->GetOutputCount() == 0)
       throw std::runtime_error("OnnxRuntimeBackend: session has no input or output tensors");
@@ -246,7 +301,7 @@ namespace observatory::inference
       for (const auto &mem_info : mem_infos)
       {
         OrtAllocator *allocator = env_->GetSharedAllocator(mem_info);
-        bool staged = needs_staged_copy(mem_info) && allocator != nullptr;
+        bool staged = NeedsStagedCopy(mem_info) && allocator != nullptr;
         plan.push_back({staged, staged ? allocator : nullptr});
       }
       return plan;
@@ -254,7 +309,7 @@ namespace observatory::inference
     input_plan_ = build_plan(input_memory_info_);
     output_plan_ = build_plan(output_memory_info_);
 
-    const auto create_stream_and_notification = [](const Ort::ConstEpDevice &device, std::unique_ptr<Ort::SyncStream> &stream, SyncNotificationPtr &notification)
+    const auto create_stream_and_notification = [](const Ort::ConstEpDevice &device, std::unique_ptr<Ort::SyncStream> &stream, SyncNotificationPtr &notification) static
     {
       if (device == nullptr || device.Device().Type() == OrtHardwareDeviceType_CPU)
       {
@@ -265,12 +320,14 @@ namespace observatory::inference
       try
       {
         stream = std::make_unique<Ort::SyncStream>(device.CreateSyncStream());
-        notification = create_notification(sync_stream_impl(*stream));
+        notification = CreateNotification(GetSyncStreamImpl(*stream));
       }
       catch (const std::exception &)
       {
+        // std::to_underlying (C++23): explicit about using the enum's real
+        // underlying type instead of assuming it's int via static_cast<int>.
         std::cerr << std::format("Device/EP type {} does not support SyncStream, falling back to synchronous copies",
-                                 static_cast<int>(device.Device().Type()))
+                                 std::to_underlying(device.Device().Type()))
                   << std::endl;
         stream = nullptr;
         notification = nullptr;
@@ -285,29 +342,32 @@ namespace observatory::inference
     create_stream_and_notification(output_ep_device, download_stream_, download_notification_);
   }
 
-  void OnnxRuntimeBackend::Impl::run(const std::vector<Tensor> &input, std::vector<Tensor> &output)
+  void OnnxRuntimeBackend::Impl::Run(const std::vector<Tensor> &input, std::vector<Tensor> &output)
   {
-    preprocess(input, output);
+    Preprocess(input, output);
     session_->Run(*run_options_, *frame_slot_.io_binding);
     frame_slot_.io_binding->SynchronizeOutputs();
     if (compute_notification_ != nullptr && download_stream_ != nullptr)
     {
+      // Let download_stream_ wait (on the device, without blocking the CPU)
+      // for every op enqueued on compute_stream_ - including this Run() - to
+      // finish, before Postprocess() issues the device->host copy below.
       Ort::ThrowOnError(compute_notification_->Activate(compute_notification_.get()));
       Ort::ThrowOnError(compute_notification_->WaitOnDevice(compute_notification_.get(), *download_stream_.get()));
     }
-    postprocess(output);
+    Postprocess(output);
   }
 
-  void OnnxRuntimeBackend::Impl::preprocess(const std::vector<Tensor> &input, std::vector<Tensor> &output)
+  void OnnxRuntimeBackend::Impl::Preprocess(const std::vector<Tensor> &input, std::vector<Tensor> &output)
   {
     if (env_ == nullptr || session_ == nullptr)
-      throw std::runtime_error("OnnxRuntimeBackend::preprocess: env_ or session_ is null");
+      throw std::runtime_error("OnnxRuntimeBackend::Preprocess: env_ or session_ is null");
     if (input.empty() || output.empty())
-      throw std::invalid_argument("OnnxRuntimeBackend::preprocess: input or output vector is empty");
+      throw std::invalid_argument("OnnxRuntimeBackend::Preprocess: input or output vector is empty");
     if (input.size() != input_plan_.size())
-      throw std::invalid_argument("OnnxRuntimeBackend::preprocess: input size does not match model input count");
+      throw std::invalid_argument("OnnxRuntimeBackend::Preprocess: input size does not match model input count");
     if (output.size() != output_plan_.size())
-      throw std::invalid_argument("OnnxRuntimeBackend::preprocess: output size does not match model output count");
+      throw std::invalid_argument("OnnxRuntimeBackend::Preprocess: output size does not match model output count");
 
     frame_slot_.input_tensors.clear();
     frame_slot_.input_tensors.reserve(input.size());
@@ -318,19 +378,22 @@ namespace observatory::inference
     // anything going to device memory needs a CPU->device copy *before*
     // Run(). Anything staying on CPU is bound straight to the caller's
     // buffer - no copy needed.
+    // std::views::zip (C++23): walks input/input_plan_/input_names_ together
+    // instead of indexing all three by a shared `i` - one less moving part to
+    // keep in sync (this exact loop has been the site of index-related bugs
+    // before).
     bool any_input_staged = false;
-    for (size_t i = 0; i < input.size(); ++i)
+    for (auto &&[input_tensor, plan, name] : std::views::zip(input, input_plan_, input_names_))
     {
-      Tensor &tensor = const_cast<Tensor &>(input[i]);
-      Ort::Value cpu_value = create_ort_value(kCpuAllocator.GetInfo(), tensor);
+      Tensor &tensor = const_cast<Tensor &>(input_tensor);
+      Ort::Value cpu_value = CreateOrtValue(kCpuAllocator.GetInfo(), tensor);
 
-      const auto &plan = input_plan_[i];
       if (!plan.staged)
         frame_slot_.input_tensors.push_back(std::move(cpu_value));
       else
       {
         Ort::Value device_value = Ort::Value::CreateTensor(
-            plan.device_allocator, tensor.shape().data(), tensor.shape().size(), to_onnx_element_type(tensor.dtype()));
+            plan.device_allocator, tensor.shape().data(), tensor.shape().size(), ToOnnxElementType(tensor.dtype()));
         // Synchronous (stream == nullptr): completes before CopyTensor
         // returns, so cpu_value can be dropped right after.
         // Note that if upload_stream_ == nullptr, it will synchronously work in CPU
@@ -339,64 +402,67 @@ namespace observatory::inference
         any_input_staged = true;
         frame_slot_.input_tensors.push_back(std::move(device_value));
       }
-      frame_slot_.io_binding->BindInput(input_names_[i].get(), frame_slot_.input_tensors[i]);
+      frame_slot_.io_binding->BindInput(name.get(), frame_slot_.input_tensors.back());
     }
     if (any_input_staged && upload_notification_ != nullptr && compute_stream_ != nullptr)
     {
+      // One barrier for the whole batch: every CopyTensor above shares
+      // upload_stream_, and a stream executes in FIFO order, so a single
+      // Activate() here already covers every copy enqueued in the loop.
       Ort::ThrowOnError(upload_notification_->Activate(upload_notification_.get()));
       Ort::ThrowOnError(upload_notification_->WaitOnDevice(upload_notification_.get(), *compute_stream_.get()));
     }
     // Outputs: there's nothing to copy in yet - the model hasn't run. Device
     // outputs just need an empty buffer of the right shape; the device->host
-    // copy happens after Run(), in run().
-    for (size_t i = 0; i < output.size(); ++i)
+    // copy happens after Run(), in Postprocess().
+    for (auto &&[tensor, plan, name] : std::views::zip(output, output_plan_, output_names_))
     {
-      Tensor &tensor = output[i];
-      const auto &plan = output_plan_[i];
       if (!plan.staged)
-        frame_slot_.output_tensors.push_back(create_ort_value(kCpuAllocator.GetInfo(), tensor));
+        frame_slot_.output_tensors.push_back(CreateOrtValue(kCpuAllocator.GetInfo(), tensor));
       else
         frame_slot_.output_tensors.push_back(Ort::Value::CreateTensor(
-            plan.device_allocator, tensor.shape().data(), tensor.shape().size(), to_onnx_element_type(tensor.dtype())));
+            plan.device_allocator, tensor.shape().data(), tensor.shape().size(), ToOnnxElementType(tensor.dtype())));
 
-      frame_slot_.io_binding->BindOutput(output_names_[i].get(), frame_slot_.output_tensors[i]);
+      frame_slot_.io_binding->BindOutput(name.get(), frame_slot_.output_tensors.back());
     }
   }
 
-  void OnnxRuntimeBackend::Impl::postprocess(std::vector<Tensor> &output)
+  void OnnxRuntimeBackend::Impl::Postprocess(std::vector<Tensor> &output)
   {
     // Outputs that landed on device memory aren't readable by the caller yet:
     // bring each one back into the caller's (CPU) Tensor buffer. Outputs that
     // were already bound directly to the caller's buffer need nothing further
     // - the data is already there.
     bool any_output_staged = false;
-    for (size_t i = 0; i < output.size(); ++i)
+    for (auto &&[plan, tensor, device_value] : std::views::zip(output_plan_, output, frame_slot_.output_tensors))
     {
-      const auto &plan = output_plan_[i];
       if (!plan.staged)
         continue;
-      Ort::Value cpu_value = create_ort_value(kCpuAllocator.GetInfo(), output[i]);
+      Ort::Value cpu_value = CreateOrtValue(kCpuAllocator.GetInfo(), tensor);
       OrtSyncStream *download = download_stream_ ? static_cast<OrtSyncStream *>(*download_stream_) : nullptr;
-      env_->CopyTensor(frame_slot_.output_tensors[i], cpu_value, /*stream=*/download);
+      env_->CopyTensor(device_value, cpu_value, /*stream=*/download);
       any_output_staged = true;
     }
     if (any_output_staged && download_notification_ != nullptr)
     {
+      // Unlike the upload/compute handoff, the consumer here is the CPU
+      // itself (the caller is about to read `output`), so this waits on the
+      // host rather than on another device stream.
       Ort::ThrowOnError(download_notification_->Activate(download_notification_.get()));
       Ort::ThrowOnError(download_notification_->WaitOnHost(download_notification_.get()));
     }
   }
 
-  void OnnxRuntimeBackend::Impl::register_execution_providers()
+  void OnnxRuntimeBackend::Impl::RegisterExecutionProviders()
   {
     if (!env_)
-      throw std::runtime_error("OnnxRuntimeBackend::register_execution_providers: env_ is null");
+      throw std::runtime_error("OnnxRuntimeBackend::RegisterExecutionProviders: env_ is null");
 
-    static const auto get_ep_dll_name = [](const std::string_view ep_name)
+    static const auto get_ep_dll_name = [](const std::string_view ep_name) static
     {
-      return std::pair<std::string_view, std::string>(ep_name, dll_name(std::format("onnxruntime_providers_{}", ep_name)));
+      return std::pair<std::string_view, std::string>(ep_name, DllName(std::format("onnxruntime_providers_{}", ep_name)));
     };
-    
+
     static const std::array<std::pair<std::string_view, std::string>, 5> kProviderLibraries{{
         get_ep_dll_name("nv_tensorrt_rtx"),
         get_ep_dll_name("cuda"),
@@ -404,10 +470,10 @@ namespace observatory::inference
         get_ep_dll_name("qnn"),
         get_ep_dll_name("cann"),
     }};
-    const auto kFolderParentPath = get_executable_path().parent_path();
+    const auto executable_parent_path = GetExecutablePath().parent_path();
     for (auto &[registration_name, dll] : kProviderLibraries)
     {
-      const auto providers_library = kFolderParentPath / dll;
+      const auto providers_library = executable_parent_path / dll;
       if (!std::filesystem::is_regular_file(providers_library))
       {
         std::cerr << std::format("Provider library {} does not exist! Skipping execution provider", providers_library.string());
@@ -415,7 +481,7 @@ namespace observatory::inference
       }
       try
       {
-        env_->RegisterExecutionProviderLibrary(registration_name.data(), toOrtFileString(providers_library));
+        env_->RegisterExecutionProviderLibrary(registration_name.data(), ToOrtFileString(providers_library));
       }
       catch (std::exception &ex)
       {
@@ -424,13 +490,13 @@ namespace observatory::inference
     }
   }
 
-  void OnnxRuntimeBackend::Impl::select_execution_provider(Ort::SessionOptions &session_options, InferenceBackendType ep_type)
+  void OnnxRuntimeBackend::Impl::SelectExecutionProvider(Ort::SessionOptions &session_options, InferenceBackendType ep_type)
   {
     if (!env_)
-      throw std::runtime_error("OnnxRuntimeBackend::select_execution_provider: env_ is null");
+      throw std::runtime_error("OnnxRuntimeBackend::SelectExecutionProvider: env_ is null");
 
-    if (!is_onnx_runtime_backend_type(ep_type))
-      throw std::runtime_error("OnnxRuntimeBackend::select_execution_provider: InferenceBackendType is not an ONNX Runtime backend type");
+    if (!IsOnnxRuntimeBackendType(ep_type))
+      throw std::runtime_error("OnnxRuntimeBackend::SelectExecutionProvider: InferenceBackendType is not an ONNX Runtime backend type");
 
     if (ep_type == InferenceBackendType::kOnnxRuntimeBest)
     {
@@ -444,9 +510,9 @@ namespace observatory::inference
       return;
     }
 
-    const auto registration_name = ep_registration_name(ep_type);
+    const auto registration_name = EpRegistrationName(ep_type);
     if (registration_name.empty())
-      throw std::runtime_error("OnnxRuntimeBackend::select_execution_provider: unsupported InferenceBackendType");
+      throw std::runtime_error("OnnxRuntimeBackend::SelectExecutionProvider: unsupported InferenceBackendType");
 
     std::vector<Ort::ConstEpDevice> selected_devices;
     for (const auto &ep_device : env_->GetEpDevices())
@@ -457,7 +523,7 @@ namespace observatory::inference
 
     if (selected_devices.empty())
       throw std::runtime_error(std::format(
-          "OnnxRuntimeBackend::select_execution_provider: no devices found for execution provider \"{}\"",
+          "OnnxRuntimeBackend::SelectExecutionProvider: no devices found for execution provider \"{}\"",
           registration_name));
 
     bool has_npu_mem = false, has_gpu_mem = false;
@@ -481,12 +547,12 @@ namespace observatory::inference
     session_options.AppendExecutionProvider_V2(*env_, selected_devices, std::unordered_map<std::string, std::string>{});
   }
 
-  bool OnnxRuntimeBackend::Impl::is_model_file_valid(const std::filesystem::path &model_file)
+  bool OnnxRuntimeBackend::Impl::IsModelFileValid(const std::filesystem::path &model_file)
   {
     return std::filesystem::is_regular_file(model_file) && model_file.extension() == ".onnx";
   }
 
-  ONNXTensorElementDataType OnnxRuntimeBackend::Impl::to_onnx_element_type(const TensorDataType dtype)
+  ONNXTensorElementDataType OnnxRuntimeBackend::Impl::ToOnnxElementType(const TensorDataType dtype)
   {
     switch (dtype)
     {
@@ -497,13 +563,13 @@ namespace observatory::inference
     case TensorDataType::kUInt8:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8;
     }
-    throw std::logic_error("to_onnx_element_type: unhandled TensorDataType");
+    throw std::logic_error("ToOnnxElementType: unhandled TensorDataType");
   }
 
-  Ort::Value OnnxRuntimeBackend::Impl::create_ort_value(const OrtMemoryInfo *mem_info, Tensor &tensor)
+  Ort::Value OnnxRuntimeBackend::Impl::CreateOrtValue(const OrtMemoryInfo *mem_info, Tensor &tensor)
   {
     const std::vector<int64_t> &shape = tensor.shape();
-    return Ort::Value::CreateTensor(mem_info, tensor.data(), tensor.byte_size(), shape.data(), shape.size(), to_onnx_element_type(tensor.dtype()));
+    return Ort::Value::CreateTensor(mem_info, tensor.data(), tensor.byte_size(), shape.data(), shape.size(), ToOnnxElementType(tensor.dtype()));
   }
 
   // --- OnnxRuntimeBackend: thin forwarding to Impl ---------------------------
@@ -517,7 +583,7 @@ namespace observatory::inference
 
   void OnnxRuntimeBackend::run(const std::vector<Tensor> &input, std::vector<Tensor> &output)
   {
-    p_impl_->run(input, output);
+    p_impl_->Run(input, output);
   }
 
 } // namespace observatory::inference
