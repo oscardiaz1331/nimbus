@@ -87,6 +87,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# `lib/` above (Python packaging template) also matched web's frontend
+# sources and silently kept them out of git — re-include them explicitly.
+!web/frontend/src/lib/
 lib64/
 parts/
 sdist/

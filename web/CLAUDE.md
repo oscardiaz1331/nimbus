@@ -38,23 +38,35 @@ browsers / mobile / e-paper / any program  (JSON API)
   browser-side from the CDNs.
 - **Some widgets need no server at all.** The `orrery` views (terminator
   map, Earth–Moon, orbit) run on `frontend/src/lib/astro.js` — low-precision
-  Meeus formulas (~0.1–0.5°, fine for schematics) plus bundled Natural Earth
-  coastlines (`src/assets/land-rings.json`, public domain). The day/night
-  map is equal-area Mollweide; the Earth–Moon globe is a draggable, per-pixel
-  rendered 3D view (default camera: ecliptic north, so the 23.4° axial tilt
-  is visible). Earth and Moon share one rasterizer (`Orrery.svelte`'s
-  `rasterSphere`); the Moon's orbital position comes from `moonPlane`/
-  `moonDir` — the real ecliptic plane expressed in the same Earth-fixed
-  frame as the sun vector, projected through the *same* camera basis as the
-  globe. There is no separate "Sun" object drawn — only the per-pixel
-  terminator shading, driven by the real sun vector, so there is nothing
-  that can visually contradict it. The camera is stored in the inertial
-  frame (dec + RA) and converted to Earth-fixed coordinates via sidereal
-  time each frame — that's what spins the Earth on its own axis under a
-  fixed camera instead of dragging the whole scene when the time slider
-  moves. Each view has a time slider (±24 h; ±6 months on the orbit).
-  Precise rise/set times stay in the astral-backed provider; don't
-  duplicate them client-side.
+  Meeus formulas (~0.1–0.5°, fine for schematics; moon phase timing ~±2 h)
+  plus bundled Natural Earth coastlines (`src/assets/land-rings.json`,
+  public domain). The day/night map is equal-area Mollweide, rendered **per
+  pixel** (inverse projection → land-mask lookup → twilight shading from
+  the real sun vector, same brightness formula as the globe) and **centred
+  on the station's longitude** from config.yaml, not on Greenwich; the
+  Earth–Moon globe is a draggable, per-pixel rendered 3D view (default
+  camera: ecliptic north, so the 23.4° axial tilt is visible). Earth and
+  Moon share one rasterizer (`Orrery.svelte`'s `rasterSphere`); the Moon's
+  orbital position comes from `moonPlane`/`moonDir` — the real ecliptic
+  plane expressed in the same Earth-fixed frame as the sun vector,
+  projected through the *same* camera basis as the globe. There is no
+  separate "Sun" object drawn — only the per-pixel terminator shading,
+  driven by the real sun vector, so there is nothing that can visually
+  contradict it. The camera is stored in the inertial frame (dec + RA) and
+  converted to Earth-fixed coordinates via sidereal time each frame —
+  that's what spins the Earth on its own axis under a fixed camera instead
+  of dragging the whole scene when the time slider moves. The orbit view
+  carries the year's sky events from `lib/events.js` — meteor showers are
+  pinned at their **solar-longitude** peaks (IMO values, so dates adapt per
+  year; that's why they belong on the orbit), equinoxes/solstices at λ☉ =
+  0/90/180/270, apsides, plus next full/new moon — with an upcoming-events
+  countdown panel on the right (click an event to time-travel the orbit to
+  it) and month ticks (Earth's true position on the 1st of each month).
+  Event instants are solved by Newton iteration on solar longitude /
+  lunar elongation (`nextSolarLongitude` / `nextMoonElongation`). Each
+  view has a time slider (±24 h; ±12 months on the orbit). Precise
+  rise/set times stay in the astral-backed provider; don't duplicate them
+  client-side.
   # ponytail: rasterSphere composites each sphere via an offscreen scratch
   # canvas + drawImage, never ctx.putImageData() straight onto the shared
   # canvas — putImageData replaces pixels outright (no alpha blending), so
@@ -119,6 +131,12 @@ scripts/build-and-restart.sh [port] # npm run build, then restart.sh
   (no psutil); probes return null where the host lacks them (e.g. no thermal
   zone under WSL).
 - `TODO(design):` marks deliberately deferred decisions.
+- **Gitignore trap (already bitten once):** the root `.gitignore`'s Python
+  template has a bare `lib/` rule that matched `frontend/src/lib/` and kept
+  those sources out of git until they were lost and had to be reconstructed
+  from the dist bundle. The re-include `!web/frontend/src/lib/` now guards
+  it — check `git status` shows new files under `src/lib/` before assuming
+  they're tracked.
 
 ## Adding a widget
 1. Only if it needs a new external source: `server/providers/<name>.py`

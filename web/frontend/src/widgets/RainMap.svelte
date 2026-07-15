@@ -77,7 +77,7 @@
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         }).addTo(map);
-        if (st.latitude != null) {
+        if (st.latitude != null && st.longitude != null) {
           L.circleMarker([st.latitude, st.longitude], {
             radius: 6,
             weight: 2,

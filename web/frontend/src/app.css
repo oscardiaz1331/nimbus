@@ -474,6 +474,130 @@ table.data a {
   fill: var(--series-2);
 }
 
+.orrery-svg .svg-label-dim {
+  fill: var(--baseline);
+  font-size: 8px;
+}
+
+.orrery-svg .svg-label-strong {
+  fill: var(--text-secondary);
+  font-weight: 600;
+}
+
+.orrery-svg .ev-marker {
+  cursor: pointer;
+  outline: none;
+}
+
+.orrery-svg .ev-marker:focus-visible circle,
+.orrery-svg .ev-marker:focus-visible rect {
+  stroke: var(--text-primary);
+  stroke-width: 1;
+}
+
+/* Orbit view: diagram left, upcoming-events countdown panel right */
+.orbit-layout {
+  display: flex;
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+.orbit-layout .orrery-svg {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.events-panel {
+  flex: 0 0 13.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-left: 1px solid var(--gridline);
+  padding-left: 0.9rem;
+}
+
+.events-panel .events-title {
+  margin: 0 0 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.event-row:hover {
+  border-color: var(--baseline);
+}
+
+.event-row.active {
+  background: var(--series-1-band);
+  border-color: var(--baseline);
+}
+
+.event-row .ev-ico {
+  flex: none;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.event-row .ev-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-row .ev-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-row .ev-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-row .ev-count {
+  flex: none;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 700px) {
+  .orbit-layout {
+    flex-direction: column;
+  }
+  .events-panel {
+    border-left: none;
+    padding-left: 0;
+    flex: auto;
+    max-height: 240px;
+  }
+}
+
 .orrery-drag {
   cursor: grab;
   touch-action: none; /* let pointer events drive the globe on touchscreens */

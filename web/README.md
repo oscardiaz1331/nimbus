@@ -10,6 +10,42 @@ the dashboard keeps working when the internet doesn't. An optional ambient
 layer paints the page with the current weather — rain drops, drifting
 clouds, sun glow, or stars.
 
+## Screenshots
+
+**Dashboard** — cloud cover now, latest all-sky frame with AI-mask slider,
+sun/moon summary, Pi system health, 24 h history and 48 h forecast in one
+overview page:
+
+![Dashboard overview](assets/dashboard.png)
+
+**Sky** — all-sky image + segmentation, per-class cloud breakdown, cloud
+cover history (24 h/7 d/30 d) and raw observations:
+
+![Sky section](assets/sky.png)
+
+**Weather** — precipitation radar (Leaflet + RainViewer) and the Open-Meteo
+hourly forecast table:
+
+![Weather section](assets/weather.png)
+
+**Astronomy** — the `orrery` widget's three views, all client-side math:
+day/night Mollweide map, draggable 3D Earth–Moon globe, and Earth's orbit
+around the Sun.
+
+| Day / Night | Earth – Moon | Orbit |
+|---|---|---|
+| ![Day/night terminator map](assets/day-and-night.png) | ![Earth–Moon globe](assets/earth-moon.png) | ![Earth orbit view](assets/orbit.png) |
+
+**LoRa** — node status (online/stale/offline, battery) and RSSI/SNR link
+quality history per node:
+
+![LoRa section](assets/lora.png)
+
+**System** — Raspberry Pi health (CPU, RAM, disk, uptime) and provider
+cache ages:
+
+![System section](assets/system.png)
+
 ```
 web/
 ├── config.yaml               # single source of truth: server, storage, stations,
@@ -46,9 +82,11 @@ web/
 │       │                         #   bundled once, used by the orrery widget
 │       ├── lib/
 │       │   ├── api.js        # fetch wrapper + polling
-│       │   ├── format.js     # percent / time formatting
+│       │   ├── format.js     # percent / time / countdown formatting
 │       │   ├── ambient.js    # weather-code -> ambient effect decision
-│       │   └── astro.js      # offline sun/moon/orbit math (Meeus, low precision)
+│       │   ├── astro.js      # offline sun/moon/orbit math (Meeus, low precision)
+│       │   └── events.js     # yearly sky events: meteor showers (by solar
+│       │                     #   longitude), equinoxes/solstices, apsides, moons
 │       └── widgets/
 │           ├── registry.js   # widget type -> component map
 │           ├── Widget.svelte # shared card frame (title/loading/error)
@@ -187,7 +225,7 @@ ephemeris locally with `astral` and still benefits from the TTL cache.
 | `rain-map` | Leaflet + OSM + RainViewer radar animation | yes (tiles) |
 | `cloud-classes` | per-class cloud breakdown from `classes` | no |
 | `timelapse` | replay of the recent all-sky frames | no |
-| `orrery` | day/night Mollweide map, draggable per-pixel 3D Earth–Moon globe (real axial tilt, real lunar orbital position, no separate "Sun" object — only true terminator shading), orbit view; time sliders ±24 h / ±6 months — all client-side math | no |
+| `orrery` | day/night Mollweide map (per-pixel twilight shading, centred on the station's meridian), draggable per-pixel 3D Earth–Moon globe (real axial tilt, real lunar orbital position, no separate "Sun" object — only true terminator shading), and an orbit view with month ticks, the year's sky events (meteor showers at their solar-longitude peaks, equinoxes/solstices, perihelion/aphelion) pinned to the orbit plus an upcoming-events countdown panel; time sliders ±24 h / ±12 months — all client-side math | no |
 | `raw-observations` | raw observation rows table | no |
 | `system-status` | Pi CPU/RAM/temp/uptime, disk, DB, cache ages, last_seen | no |
 
