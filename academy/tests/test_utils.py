@@ -41,7 +41,14 @@ def test_session_matches_paths_module() -> None:
 
 
 def _fake_cfg_with_checkpoint(root: Path, checkpoint: str | None):
-    return types.SimpleNamespace(output_dir=str(root), model=types.SimpleNamespace(checkpoint=checkpoint))
+    return types.SimpleNamespace(
+        output_dir=str(root),
+        framework="yolo",
+        model=types.SimpleNamespace(
+            checkpoint=checkpoint,
+            yolo=types.SimpleNamespace(variant="yolo11n-seg"),
+        ),
+    )
 
 
 def test_resolve_checkpoint_explicit() -> None:
@@ -54,10 +61,9 @@ def test_resolve_checkpoint_explicit() -> None:
 
 def test_resolve_checkpoint_fallback() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        wd = Path(tmp) / "weights"
-        wd.mkdir()
-        (wd / "best.pt").touch()
         cfg = _fake_cfg_with_checkpoint(Path(tmp), None)
+        wd = paths.weights_dir(cfg)  # nested under <output_dir>/<framework>/<variant>/weights
+        (wd / "best.pt").touch()
         assert paths.resolve_checkpoint(cfg, ("best.pt", "last.pt")) == wd / "best.pt"
 
 

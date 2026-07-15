@@ -16,8 +16,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from utils.benchmark.profiler import ProfileResult, profile
 from utils.commons import (
-    FPSBenchmark,
     compute_classification_metrics,
     compute_segmentation_metrics,
     load_class_names,
@@ -39,7 +39,7 @@ def _list_images(images_dir: Path) -> list[Path]:
     )
 
 
-def run_segmentation_eval(cfg: Config, adapter, out_dir: Path) -> None:
+def run_segmentation_eval(cfg: Config, adapter, out_dir: Path) -> pd.DataFrame:
     class_names = load_class_names(cfg.dataset.yaml_path)
     num_classes = len(class_names)
     images_dir = cfg.dataset.images_dir(cfg.dataset.test_split)
@@ -79,6 +79,7 @@ def run_segmentation_eval(cfg: Config, adapter, out_dir: Path) -> None:
         df, out_dir, "class_name", ["iou", "dice", "precision", "recall", "accuracy"]
     )
     print(f"\n{summary}\n")
+    return summary
 
 
 def run_classification_eval(cfg: Config, adapter, out_dir: Path) -> None:
@@ -119,13 +120,45 @@ def run_classification_eval(cfg: Config, adapter, out_dir: Path) -> None:
     )
 
 
-def benchmark_fps(cfg: Config, adapter, sample_image: np.ndarray) -> float:
-    bench = FPSBenchmark(
-        warmup=cfg.inference.benchmark_warmup, iters=cfg.inference.benchmark_iters
+def benchmark_fps(
+    cfg: Config, adapter, sample_image: np.ndarray
+) -> tuple[ProfileResult, float | None]:
+    """FPS/latency/RAM via ``profile()`` plus peak VRAM across the whole run.
+
+    ``profile()``'s own ``vram_mb`` is a single post-hoc reading (steady-state
+    allocation after warmup+iters); peak is tracked separately here via
+    ``torch.cuda.reset_peak_memory_stats`` so short-lived activation memory
+    that's freed before that reading isn't missed — that peak is the number
+    that actually determines whether a given card OOMs.
+    """
+    try:
+        import torch
+
+        has_cuda = torch.cuda.is_available()
+    except ImportError:
+        torch, has_cuda = None, False
+    if has_cuda:
+        torch.cuda.reset_peak_memory_stats()
+
+    result = profile(
+        lambda: adapter.predict(sample_image),
+        warmup=cfg.inference.benchmark_warmup,
+        iters=cfg.inference.benchmark_iters,
     )
-    fps = bench.run(lambda: adapter.predict(sample_image))
-    print(f"\n  Benchmark: {fps:.1f} FPS  (warmup={bench.warmup}, iters={bench.iters})")
-    return fps
+    peak_vram_mb = torch.cuda.max_memory_allocated() / (1024 ** 2) if has_cuda else None
+
+    if result.vram_mb is None:
+        vram_str = "n/a"
+    elif peak_vram_mb is None:
+        vram_str = f"{result.vram_mb:.0f} MB"
+    else:
+        vram_str = f"{result.vram_mb:.0f} MB (peak {peak_vram_mb:.0f} MB)"
+    print(
+        f"\n  Benchmark: {result.fps:.1f} FPS  {result.mean_latency_ms:.1f} ms  "
+        f"RAM={result.ram_mb:.0f} MB  VRAM={vram_str}  "
+        f"(warmup={cfg.inference.benchmark_warmup}, iters={cfg.inference.benchmark_iters})"
+    )
+    return result, peak_vram_mb
 
 
 def main(config_path: str, checkpoint: str | None) -> None:
