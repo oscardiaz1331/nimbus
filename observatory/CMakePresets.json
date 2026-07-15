@@ -8,14 +8,40 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14"
       }
     },
     {
-      "name": "debug",
+      "name": "windows-base",
+      "hidden": true,
       "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "linux-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "OBSERVATORY_BUILD_TESTS": "ON"
@@ -23,7 +49,7 @@
     },
     {
       "name": "release",
-      "inherits": "base",
+      "inherits": "linux-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "OBSERVATORY_BUILD_TESTS": "ON"
@@ -35,17 +61,48 @@
       "cacheVariables": {
         "OBSERVATORY_ENABLE_CUDA": "ON"
       }
+    },
+    {
+      "name": "windows-debug",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "OBSERVATORY_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-release",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "OBSERVATORY_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-debug-cuda",
+      "inherits": "windows-debug",
+      "cacheVariables": {
+        "OBSERVATORY_ENABLE_CUDA": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "debug-cuda", "configurePreset": "debug-cuda" }
+    { "name": "debug-cuda", "configurePreset": "debug-cuda" },
+    { "name": "windows-debug", "configurePreset": "windows-debug" },
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "windows-debug-cuda", "configurePreset": "windows-debug-cuda" }
   ],
   "testPresets": [
     {
       "name": "debug",
       "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
       "output": { "outputOnFailure": true }
     }
   ]

@@ -15,3 +15,4 @@ target_link_libraries(observatory PRIVATE
 )
 
 observatory_set_warnings(observatory)
+observatory_copy_onnxruntime_dlls(observatory)

@@ -9,4 +9,5 @@ target_link_libraries(observatory_inference_tests PRIVATE
   observatory::inference
   GTest::gtest_main
 )
+observatory_copy_onnxruntime_dlls(observatory_inference_tests)
 gtest_discover_tests(observatory_inference_tests)

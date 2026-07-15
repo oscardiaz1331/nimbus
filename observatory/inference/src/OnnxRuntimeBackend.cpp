@@ -1,9 +1,10 @@
 #include "observatory/inference/OnnxRuntimeBackend.hpp"
 
 #include <array>
+#include <expected>
 #include <filesystem>
 #include <format>
-#include <iostream>
+#include <print>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -25,21 +26,6 @@ namespace observatory::inference
 
   namespace
   {
-
-#if defined(_WIN32)
-    inline static constexpr std::string_view kDllPrefix = "";
-    inline static constexpr std::string_view kDllSuffix = ".dll";
-#else
-    inline static constexpr std::string_view kDllPrefix = "lib";
-    inline static constexpr std::string_view kDllSuffix = ".so";
-#endif
-
-    /// @brief Builds the platform-specific shared library file name for
-    ///   `base_name` (e.g. "cuda" -> "libonnxruntime_providers_cuda.so").
-    std::string DllName(const std::string_view base_name)
-    {
-      return std::format("{}{}{}", kDllPrefix, base_name, kDllSuffix);
-    }
 
     /// @brief Maps an InferenceBackendType to the registration name used in
     ///   Impl::RegisterExecutionProviders(). Empty for the values that don't
@@ -186,12 +172,16 @@ namespace observatory::inference
 
     /// @brief Retrieves the OrtSyncStreamImpl backing `stream`, needed to
     ///   create OrtSyncNotificationImpl objects for it.
-    /// @throws std::runtime_error if the EP doesn't expose one for `stream`.
-    static inline OrtSyncStreamImpl *GetSyncStreamImpl(const Ort::SyncStream &stream)
+    /// @return The OrtSyncStreamImpl, or an error message if the EP doesn't
+    ///   expose one for `stream`. Not every EP implements OrtSyncStream (see
+    ///   create_stream_and_notification's caller), so "not found" is a
+    ///   routine, expected outcome here, not a programming error - hence
+    ///   std::expected instead of throwing.
+    static inline std::expected<OrtSyncStreamImpl *, std::string> GetSyncStreamImpl(const Ort::SyncStream &stream)
     {
       const OrtSyncStreamImpl *impl = Ort::GetEpApi().SyncStream_GetImpl(stream);
       if (impl == nullptr)
-        throw std::runtime_error("GetSyncStreamImpl: EP does not expose an OrtSyncStreamImpl for this stream");
+        return std::unexpected("EP does not expose an OrtSyncStreamImpl for this stream");
       return const_cast<OrtSyncStreamImpl *>(impl);
     }
 
@@ -320,15 +310,24 @@ namespace observatory::inference
       try
       {
         stream = std::make_unique<Ort::SyncStream>(device.CreateSyncStream());
-        notification = CreateNotification(GetSyncStreamImpl(*stream));
+        // GetSyncStreamImpl returns std::expected rather than throwing: "no
+        // impl for this stream" is a routine outcome (not every EP
+        // implements OrtSyncStream), so surface it as a value here. It's
+        // turned into an exception right after purely to join the single
+        // recovery path below, shared with CreateSyncStream()/
+        // CreateNotification() above/below, which are ONNX Runtime calls we
+        // don't control and that do throw on failure.
+        const std::expected<OrtSyncStreamImpl *, std::string> stream_impl = GetSyncStreamImpl(*stream);
+        if (!stream_impl.has_value())
+          throw std::runtime_error(stream_impl.error());
+        notification = CreateNotification(stream_impl.value());
       }
-      catch (const std::exception &)
+      catch (const std::exception &ex)
       {
         // std::to_underlying (C++23): explicit about using the enum's real
         // underlying type instead of assuming it's int via static_cast<int>.
-        std::cerr << std::format("Device/EP type {} does not support SyncStream, falling back to synchronous copies",
-                                 std::to_underlying(device.Device().Type()))
-                  << std::endl;
+        std::println(stderr, "Device/EP type {} does not support SyncStream ({}), falling back to synchronous copies",
+                     std::to_underlying(device.Device().Type()), ex.what());
         stream = nullptr;
         notification = nullptr;
       }
@@ -458,25 +457,32 @@ namespace observatory::inference
     if (!env_)
       throw std::runtime_error("OnnxRuntimeBackend::RegisterExecutionProviders: env_ is null");
 
-    static const auto get_ep_dll_name = [](const std::string_view ep_name) static
-    {
-      return std::pair<std::string_view, std::string>(ep_name, DllName(std::format("onnxruntime_providers_{}", ep_name)));
-    };
-
-    static const std::array<std::pair<std::string_view, std::string>, 5> kProviderLibraries{{
-        get_ep_dll_name("nv_tensorrt_rtx"),
-        get_ep_dll_name("cuda"),
-        get_ep_dll_name("openvino"),
-        get_ep_dll_name("qnn"),
-        get_ep_dll_name("cann"),
+    // Every name here is known at compile time, so this is a plain constexpr
+    // table instead of building strings with std::format at runtime.
+#if defined(_WIN32)
+    static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> kProviderLibraries{{
+        {"nv_tensorrt_rtx", "onnxruntime_providers_nv_tensorrt_rtx.dll"},
+        {"cuda", "onnxruntime_providers_cuda.dll"},
+        {"openvino", "onnxruntime_providers_openvino.dll"},
+        {"qnn", "onnxruntime_providers_qnn.dll"},
+        {"cann", "onnxruntime_providers_cann.dll"},
     }};
+#else
+    static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> kProviderLibraries{{
+        {"nv_tensorrt_rtx", "libonnxruntime_providers_nv_tensorrt_rtx.so"},
+        {"cuda", "libonnxruntime_providers_cuda.so"},
+        {"openvino", "libonnxruntime_providers_openvino.so"},
+        {"qnn", "libonnxruntime_providers_qnn.so"},
+        {"cann", "libonnxruntime_providers_cann.so"},
+    }};
+#endif
     const auto executable_parent_path = GetExecutablePath().parent_path();
     for (auto &[registration_name, dll] : kProviderLibraries)
     {
       const auto providers_library = executable_parent_path / dll;
       if (!std::filesystem::is_regular_file(providers_library))
       {
-        std::cerr << std::format("Provider library {} does not exist! Skipping execution provider", providers_library.string());
+        std::println(stderr, "Provider library {} does not exist! Skipping execution provider", providers_library.string());
         continue;
       }
       try
@@ -485,7 +491,7 @@ namespace observatory::inference
       }
       catch (std::exception &ex)
       {
-        std::cerr << std::format("Failed to register {}: {}! Skipping execution provider", providers_library.string(), ex.what());
+        std::println(stderr, "Failed to register {}: {}! Skipping execution provider", providers_library.string(), ex.what());
       }
     }
   }
