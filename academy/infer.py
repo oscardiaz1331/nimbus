@@ -125,11 +125,13 @@ def benchmark_fps(
 ) -> tuple[ProfileResult, float | None]:
     """FPS/latency/RAM via ``profile()`` plus peak VRAM across the whole run.
 
-    ``profile()``'s own ``vram_mb`` is a single post-hoc reading (steady-state
-    allocation after warmup+iters); peak is tracked separately here via
-    ``torch.cuda.reset_peak_memory_stats`` so short-lived activation memory
-    that's freed before that reading isn't missed — that peak is the number
-    that actually determines whether a given card OOMs.
+    VRAM is tracked here via ``torch.cuda.reset_peak_memory_stats`` — the
+    pytorch path runs inside torch's own allocator, so its peak stats are both
+    exact and attributable, and the peak (not a steady-state reading) is the
+    number that actually determines whether a given card OOMs. ``profile()``'s
+    ``vram_mb`` stays None on this path: its NVML device-delta measurement
+    exists for onnxruntime sessions, which torch's allocator can't see
+    (see ``utils.benchmark.profiler.device_vram_used_mb``).
     """
     try:
         import torch
@@ -147,12 +149,12 @@ def benchmark_fps(
     )
     peak_vram_mb = torch.cuda.max_memory_allocated() / (1024 ** 2) if has_cuda else None
 
-    if result.vram_mb is None:
-        vram_str = "n/a"
-    elif peak_vram_mb is None:
+    if peak_vram_mb is not None:
+        vram_str = f"peak {peak_vram_mb:.0f} MB"
+    elif result.vram_mb is not None:
         vram_str = f"{result.vram_mb:.0f} MB"
     else:
-        vram_str = f"{result.vram_mb:.0f} MB (peak {peak_vram_mb:.0f} MB)"
+        vram_str = "n/a"
     print(
         f"\n  Benchmark: {result.fps:.1f} FPS  {result.mean_latency_ms:.1f} ms  "
         f"RAM={result.ram_mb:.0f} MB  VRAM={vram_str}  "
@@ -167,12 +169,7 @@ def main(config_path: str, checkpoint: str | None) -> None:
         cfg.model.checkpoint = checkpoint
 
     adapter = get_adapter(cfg)
-    variant_name = (
-        cfg.model.yolo.variant
-        if cfg.framework == "yolo"
-        else cfg.model.rfdetr.variant
-    )
-    out_dir = Path(cfg.output_dir)  / cfg.framework / variant_name / "test_eval"
+    out_dir = Path(cfg.output_dir) / cfg.framework / cfg.variant / "test_eval"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if cfg.task == "segmentation":

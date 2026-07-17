@@ -33,8 +33,9 @@ def benchmark_variant(
     evaluate: Callable[[], dict[str, float]],
     warmup: int = 10,
     iters: int = 50,
+    vram_baseline_mb: float | None = None,
 ) -> BenchmarkRow:
-    result = profile(run_once, warmup=warmup, iters=iters)
+    result = profile(run_once, warmup=warmup, iters=iters, vram_baseline_mb=vram_baseline_mb)
     return BenchmarkRow(
         name=name,
         size_mb=model_path.stat().st_size / (1024 ** 2),

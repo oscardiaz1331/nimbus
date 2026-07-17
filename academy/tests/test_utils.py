@@ -16,7 +16,7 @@ def _fake_cfg(root: Path):
     return types.SimpleNamespace(
         output_dir=str(root),
         framework="yolo",
-        model=types.SimpleNamespace(yolo=types.SimpleNamespace(variant="yolo26s-seg.pt")),
+        variant="yolo26s-seg.pt",
     )
 
 
@@ -44,10 +44,8 @@ def _fake_cfg_with_checkpoint(root: Path, checkpoint: str | None):
     return types.SimpleNamespace(
         output_dir=str(root),
         framework="yolo",
-        model=types.SimpleNamespace(
-            checkpoint=checkpoint,
-            yolo=types.SimpleNamespace(variant="yolo11n-seg"),
-        ),
+        variant="yolo11n-seg",
+        model=types.SimpleNamespace(checkpoint=checkpoint),
     )
 
 

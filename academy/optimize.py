@@ -124,6 +124,7 @@ def _run_benchmark(cfg: Config, session: Session) -> list[BenchmarkRow]:
 
     from utils.benchmark import evaluator, onnx_decode
     from utils.benchmark.benchmark import benchmark_variant
+    from utils.benchmark.profiler import device_vram_used_mb
     from utils.onnx_utils import graph_input_size
 
     device_providers = [("cpu", ["CPUExecutionProvider"])]
@@ -147,6 +148,11 @@ def _run_benchmark(cfg: Config, session: Session) -> list[BenchmarkRow]:
         dummy = np.zeros((1, 3, model_imgsz, model_imgsz), dtype=np.float32)
 
         for device_label, providers in device_providers:
+            # VRAM baseline BEFORE the session exists: NVML can't attribute
+            # memory per process under Windows WDDM, so the session's own
+            # footprint is measured as device-level growth from this reading
+            # to profile()'s post-warmup sample.
+            vram_baseline_mb = device_vram_used_mb()
             try:
                 sess = ort.InferenceSession(str(path), providers=providers)
             except Exception as e:
@@ -175,16 +181,25 @@ def _run_benchmark(cfg: Config, session: Session) -> list[BenchmarkRow]:
             else:
                 evaluate = lambda: {}
 
-            rows.append(
-                benchmark_variant(
-                    name=f"{variant_name}-{device_label}",
-                    model_path=path,
-                    run_once=run_once,
-                    evaluate=evaluate,
-                    warmup=cfg.inference.benchmark_warmup,
-                    iters=cfg.inference.benchmark_iters,
+            # Session creation succeeding doesn't mean the model runs: ORT only
+            # validates some kernels at execute time (e.g. a bad int8 quantization
+            # fails inside the first sess.run). Contain the blast radius to this
+            # variant so the others' rows survive.
+            try:
+                rows.append(
+                    benchmark_variant(
+                        name=f"{variant_name}-{device_label}",
+                        model_path=path,
+                        run_once=run_once,
+                        evaluate=evaluate,
+                        warmup=cfg.inference.benchmark_warmup,
+                        iters=cfg.inference.benchmark_iters,
+                        vram_baseline_mb=vram_baseline_mb,
+                    )
                 )
-            )
+            except Exception as e:
+                print(f"skipping {variant_name}-{device_label}: failed while running: {e}")
+                continue
     if not rows:
         raise FileNotFoundError("no variants found to benchmark — run simplify/fp16/int8 first")
     return rows
@@ -254,7 +269,7 @@ import sys
 faulthandler.enable(all_threads=True, file=sys.stderr)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Optimize pipeline CLI")
-    parser.add_argument("--command", choices=sorted(_COMMANDS), default="pipeline")
+    parser.add_argument("--command", choices=sorted(_COMMANDS), default="export")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument(
         "--prune-amount", type=float, default=0.3, help="Fraction of weights to zero out (prune command only)."

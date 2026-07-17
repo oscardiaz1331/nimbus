@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from utils.config import VALID_FRAMEWORKS
+from utils.config import Framework
 
 
 @dataclasses.dataclass
@@ -31,15 +31,17 @@ class Trial:
     """
 
     name: str
-    framework: str
+    framework: Framework
     checkpoint: str
     variant: str
 
     def __post_init__(self) -> None:
-        if self.framework not in VALID_FRAMEWORKS:
+        try:
+            self.framework = Framework(self.framework)
+        except ValueError:
             raise ValueError(
-                f"trial '{self.name}': framework must be one of {VALID_FRAMEWORKS}, got '{self.framework}'"
-            )
+                f"trial '{self.name}': framework must be one of {[f.value for f in Framework]}, got '{self.framework}'"
+            ) from None
 
 
 def load_trials(path: str | Path) -> list[Trial]:

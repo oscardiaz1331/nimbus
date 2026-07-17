@@ -25,9 +25,12 @@ python infer.py --config config.yaml --checkpoint runs/<...>/weights/best.pt
 python optimize.py --config config.yaml --command pipeline   # export→simplify→fp16→int8→report
 python optimize.py --config config.yaml --command prune --prune-amount 0.3  # opt-in, not in pipeline
 
-# Benchmark a list of checkpoints (benchmark_trials.yaml) through infer.py's own
-# eval+FPS/VRAM path and regenerate SUMMARY.md — raw framework libraries, no ONNX
-python benchmark_checkpoints.py --config config.yaml --trials benchmark_trials.yaml
+# Benchmark a list of checkpoints (benchmark_trials.yaml): one `pytorch` row per
+# checkpoint (infer.py's own eval+FPS/VRAM path, raw framework libraries) plus, unless
+# --skip-onnx, one row per existing onnx/fp16/int8 x cpu/gpu variant (optimize.py's own
+# benchmark path). --pipeline (re)generates those ONNX variants first. Regenerates
+# SUMMARY.md with a combined table and a final deployment recommendation.
+python benchmark_checkpoints.py --config config.yaml --trials benchmark_trials.yaml --pipeline
 
 # Build datasets (config-driven; raw sources must be downloaded manually first)
 python datasets/build_dataset.py --config datasets/configs/merged_cloud.yaml
@@ -46,5 +49,5 @@ There is no CI and no lint config; `black` and `pytest` are installed but unconf
 
 - **"Ponytail" comments** mark places where the code depends on framework-internal behavior (e.g. `trainer.stop`) that should be re-verified against the installed `ultralytics`/`rfdetr`/`onnxruntime` version before a long run. Preserve them, and add one when introducing a new framework-internal dependency.
 - **`config.yaml` is usually mid-experiment.** Commented-out stages, alternate checkpoint paths, etc. are deliberate experiment state — don't "clean them up" or re-enable them unless asked.
-- **Tests cover only framework-independent logic** (metrics, rasterization, plateau state machine, optimizer transforms, command wiring, evaluator, the `benchmark_trials.yaml` loader). The live training loops, `infer.py` paths (and `benchmark_checkpoints.py`, which just drives `infer.py` per checkpoint), and real ONNX conversions need a GPU + data and are untested — never launch `train.py` to verify a change; run the unittest suite instead.
+- **Tests cover only framework-independent logic** (metrics, rasterization, plateau state machine, optimizer transforms, int8's postprocessing-tail exclusion, command wiring, evaluator, RF-DETR ONNX output decoding, the profiler's VRAM-delta arithmetic, the `benchmark_trials.yaml` loader, and `benchmark_checkpoints.py`'s row-building/recommendation heuristic). The live training loops, `infer.py`/`optimize.py` paths (and `benchmark_checkpoints.py`, which just drives both per checkpoint), and real ONNX conversions need a GPU + data and are untested — never launch `train.py` to verify a change; run the unittest suite instead.
 - **Don't search or scan**: `.venv/` (full CUDA torch stack — broad globs return thousands of site-packages hits), `runs/`, `checkpoints/`, the ~800 MB of `*.pt` weights at the repo root, or local dataset dirs (`datasets/16647156/`, `datasets/swinseg_yolo/`, `datasets/merged_yolo/`).

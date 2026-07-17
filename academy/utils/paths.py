@@ -12,9 +12,7 @@ from utils.config import Config
 
 def variant_dir(cfg: Config) -> Path:
     """Base dir for all artifacts of a given model variant (YOLO or RF-DETR)."""
-    return Path(cfg.output_dir) / cfg.framework / (
-        cfg.model.yolo.variant if cfg.framework == "yolo" else cfg.model.rfdetr.variant
-    )
+    return Path(cfg.output_dir) / cfg.framework / cfg.variant
 
 def optimize_dir(cfg: Config) -> Path:
     d = variant_dir(cfg) / "optimize"

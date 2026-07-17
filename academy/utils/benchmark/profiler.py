@@ -24,8 +24,18 @@ class ProfileResult:
     vram_mb: float | None
 
 
-def profile(run_once: Callable[[], None], warmup: int, iters: int) -> ProfileResult:
-    """Time ``run_once`` after warming up, and sample process RAM/VRAM after warmup."""
+def profile(
+    run_once: Callable[[], None], warmup: int, iters: int, vram_baseline_mb: float | None = None
+) -> ProfileResult:
+    """Time ``run_once`` after warming up, and sample process RAM after warmup.
+
+    ``vram_baseline_mb`` is a ``device_vram_used_mb()`` reading the caller took
+    *before* creating whatever this profiles (e.g. an onnxruntime session) —
+    ``vram_mb`` is then the device-level growth from that baseline to the
+    post-warmup sample, i.e. the footprint attributable to the profiled model.
+    Without a baseline ``vram_mb`` is None; callers that can measure their own
+    allocator directly (torch peak stats in ``infer.benchmark_fps``) should.
+    """
     for _ in range(warmup):
         run_once()
 
@@ -38,12 +48,18 @@ def profile(run_once: Callable[[], None], warmup: int, iters: int) -> ProfileRes
     mean = statistics.mean(times)
     std = statistics.pstdev(times)
 
+    vram_mb = None
+    if vram_baseline_mb is not None:
+        used = device_vram_used_mb()
+        if used is not None:
+            vram_mb = max(used - vram_baseline_mb, 0.0)
+
     return ProfileResult(
         mean_latency_ms=mean * 1000,
         std_latency_ms=std * 1000,
         fps=1 / mean if mean > 0 else float("inf"),
         ram_mb=_process_ram_mb(),
-        vram_mb=_process_vram_mb(),
+        vram_mb=vram_mb,
     )
 
 
@@ -60,12 +76,35 @@ def _process_ram_mb() -> float:
         return psutil.Process().memory_info().rss / (1024 ** 2)
 
 
-def _process_vram_mb() -> float | None:
-    """Current process' CUDA memory usage in MB, or None if no CUDA device."""
+def device_vram_used_mb() -> float | None:
+    """Total used VRAM across all NVIDIA devices as the driver reports it
+    (NVML), or None when no driver/GPU is available.
+
+    Deliberately NOT ``torch.cuda.memory_allocated()``: that only sees torch's
+    own caching allocator, and onnxruntime's CUDA provider allocates outside
+    it — which is how every ONNX row in SUMMARY.md (CPU rows included) used to
+    report the same stale few MB of leftover torch memory. Per-process NVML
+    accounting would be nicer than device-wide, but Windows' WDDM driver model
+    can't attribute VRAM per process, so callers instead measure a
+    before/after delta around whatever they want attributed (see ``profile``'s
+    ``vram_baseline_mb``). Measurement must never kill a benchmark run, hence
+    the broad excepts.
+    """
     try:
-        import torch
+        import pynvml
     except ImportError:
         return None
-    if not torch.cuda.is_available():
+    try:
+        pynvml.nvmlInit()
+    except Exception:
         return None
-    return torch.cuda.memory_allocated() / (1024 ** 2)
+    try:
+        total_bytes = sum(
+            pynvml.nvmlDeviceGetMemoryInfo(pynvml.nvmlDeviceGetHandleByIndex(i)).used
+            for i in range(pynvml.nvmlDeviceGetCount())
+        )
+        return total_bytes / (1024 ** 2)
+    except Exception:
+        return None
+    finally:
+        pynvml.nvmlShutdown()

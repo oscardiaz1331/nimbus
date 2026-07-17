@@ -398,18 +398,18 @@ class RFDETRAdapter:
                 # Post-processing: sigmoid to get probabilities.
                 probs = logits.sigmoid()
 
-                # Mask decoding (simplest form: sigmoid + upsample).
-                # Note: if RF-DETR uses a prototype-based head (like Mask-DINO), the
-                # 'pred_masks' are already the combined result but at low resolution.
-                masks = mask_logits.sigmoid()
-
-                # Bilinear upsample to match input resolution, fixed size for ONNX compatibility.
+                # Mask decoding mirrors rfdetr's PostProcess._postprocess_masks:
+                # bilinear-upsample the LOGITS (fixed size for ONNX compatibility),
+                # sigmoid only afterwards. Upsampling after sigmoid interpolates in
+                # saturated probability space, which drags the 0.5 boundary outward
+                # and inflates every mask relative to the pytorch path.
                 masks = nn.functional.interpolate(
-                    masks,
+                    mask_logits,
                     size=(self.resolution, self.resolution),
                     mode="bilinear",
                     align_corners=False,
                 )
+                masks = masks.sigmoid()
 
                 return probs, boxes, masks
 

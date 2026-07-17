@@ -8,13 +8,14 @@ def recommend(rows: list, accuracy_keys: list[str], max_accuracy_drop_pct: float
     """Pick the fastest variant that doesn't stray too far from the baseline's accuracy.
 
     # ponytail: naive heuristic. Assumes rows[0] is the FP32/PyTorch baseline,
-    # only looks at accuracy_keys[0], and uses one hard cutoff rather than a
-    # weighted score (doesn't factor in size or VRAM). Upgrade path: accept a
-    # scoring function instead of a single threshold if this stops being good enough.
+    # prefers "dice" as the ranking metric (falls back to accuracy_keys[0] if dice
+    # isn't present — e.g. classification tasks), and uses one hard cutoff rather
+    # than a weighted score (doesn't factor in size or VRAM). Upgrade path: accept
+    # a scoring function instead of a single threshold if this stops being good enough.
     """
     if not rows or not accuracy_keys:
         return "Not enough data to make a recommendation."
-    key = accuracy_keys[0]
+    key = "dice" if "dice" in accuracy_keys else accuracy_keys[0]
     baseline = rows[0].accuracy.get(key, 0.0)
     candidates = [r for r in rows if baseline - r.accuracy.get(key, 0.0) <= max_accuracy_drop_pct]
     best = max(candidates or rows, key=lambda r: r.fps)

@@ -36,17 +36,53 @@ def mask_dice(pred: np.ndarray, gt: np.ndarray) -> float:
     return float(2 * intersection / denom) if denom else 1.0
 
 
+def mask_precision(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Precision (intersection / predicted-positive) between two same-shape masks.
+
+    Mirrors ``utils.commons.compute_segmentation_metrics``'s precision exactly
+    (both-empty -> 1.0, predicted-empty-but-gt-not -> 0.0) so pytorch and ONNX
+    rows in ``benchmark_checkpoints.py`` stay directly comparable.
+    """
+    pred, gt = pred.astype(bool), gt.astype(bool)
+    pred_sum = pred.sum()
+    if pred_sum == 0:
+        return 1.0 if gt.sum() == 0 else 0.0
+    return float(np.logical_and(pred, gt).sum() / pred_sum)
+
+
+def mask_recall(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Recall (intersection / ground-truth-positive) between two same-shape masks."""
+    pred, gt = pred.astype(bool), gt.astype(bool)
+    gt_sum = gt.sum()
+    if gt_sum == 0:
+        return 1.0 if pred.sum() == 0 else 0.0
+    return float(np.logical_and(pred, gt).sum() / gt_sum)
+
+
+def mask_pixel_accuracy(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Fraction of matching pixels between two same-shape masks (any truthy dtype)."""
+    pred, gt = pred.astype(bool), gt.astype(bool)
+    return float((pred == gt).mean())
+
+
 def evaluate(samples: Iterable[tuple], predict_mask: Callable[[object], np.ndarray]) -> dict[str, float]:
-    """Average mIoU/Dice (as 0-100) over ``samples`` of (input, ground_truth_mask) pairs.
+    """Average IoU/Dice/Precision/Recall/Accuracy (as 0-100) over ``samples``
+    of (input, ground_truth_mask) pairs — the same five pixel metrics
+    ``infer.py::run_segmentation_eval`` computes for the pytorch baseline, so
+    ONNX rows are directly comparable to it in ``benchmark_checkpoints.py``'s
+    combined table instead of only sharing IoU/Dice.
 
     ``predict_mask`` takes one sample's input and returns its predicted
     binary foreground mask — framework-specific decoding lives there, not here.
     """
-    ious, dices = [], []
+    totals = {"mIoU": [], "dice": [], "precision": [], "recall": [], "accuracy": []}
     for sample_input, gt_mask in samples:
         pred_mask = predict_mask(sample_input)
-        ious.append(mask_iou(pred_mask, gt_mask))
-        dices.append(mask_dice(pred_mask, gt_mask))
-    if not ious:
+        totals["mIoU"].append(mask_iou(pred_mask, gt_mask))
+        totals["dice"].append(mask_dice(pred_mask, gt_mask))
+        totals["precision"].append(mask_precision(pred_mask, gt_mask))
+        totals["recall"].append(mask_recall(pred_mask, gt_mask))
+        totals["accuracy"].append(mask_pixel_accuracy(pred_mask, gt_mask))
+    if not totals["mIoU"]:
         raise ValueError("evaluate() got no samples")
-    return {"mIoU": 100 * sum(ious) / len(ious), "dice": 100 * sum(dices) / len(dices)}
+    return {k: 100 * sum(v) / len(v) for k, v in totals.items()}

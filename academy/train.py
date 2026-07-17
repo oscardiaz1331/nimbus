@@ -39,14 +39,9 @@ def main(config_path: str) -> None:
 
     adapter = get_adapter(cfg)
     panels = SEG_PANELS if cfg.task == "segmentation" else CLS_PANELS
-    model_name = (
-        cfg.model.yolo.variant
-        if cfg.framework == "yolo"
-        else cfg.model.rfdetr.variant
-    )
-    print(f"\n  {cfg.framework}/{cfg.task} model: {model_name}")
+    print(f"\n  {cfg.framework}/{cfg.task} model: {cfg.variant}")
     plotter = TrainingPlotter(
-        out_dir=Path(cfg.output_dir) / cfg.framework / model_name / "plots",
+        out_dir=Path(cfg.output_dir) / cfg.framework / cfg.variant / "plots",
         panels=panels,
         plot_every=cfg.plot_every,
         title=cfg.project_name,

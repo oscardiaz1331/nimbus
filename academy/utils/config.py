@@ -8,14 +8,27 @@ preprocessing, model selection, or dataset paths.
 from __future__ import annotations
 
 import dataclasses
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-VALID_TASKS = {"segmentation", "classification"}
-VALID_FRAMEWORKS = {"yolo", "rfdetr"}
-VALID_FREEZE_MODES = {"backbone", "partial", "none"}
+
+class Task(StrEnum):
+    SEGMENTATION = "segmentation"
+    CLASSIFICATION = "classification"
+
+
+class Framework(StrEnum):
+    YOLO = "yolo"
+    RFDETR = "rfdetr"
+
+
+class FreezeMode(StrEnum):
+    BACKBONE = "backbone"
+    PARTIAL = "partial"
+    NONE = "none"
 
 
 @dataclasses.dataclass
@@ -32,25 +45,25 @@ class StageConfig:
             advances early. Ignored on the final stage.
         unfreeze_fraction: Fraction of backbone blocks (from the end) to
             unfreeze when ``freeze == "partial"``.
-        scheduler: LR scheduler used in this stage ("cosine" | "plateau").
         early_stopping_patience: Native early-stopping patience used only
             by the final stage to terminate the whole run.
     """
 
     name: str
     max_epochs: int
-    freeze: str
+    freeze: FreezeMode
     lr_factor: float = 1.0
     patience: int = 10
     unfreeze_fraction: float = 0.3
-    scheduler: str = "cosine"
     early_stopping_patience: int = 20
 
     def __post_init__(self) -> None:
-        if self.freeze not in VALID_FREEZE_MODES:
+        try:
+            self.freeze = FreezeMode(self.freeze)
+        except ValueError:
             raise ValueError(
-                f"stage '{self.name}': freeze must be one of {VALID_FREEZE_MODES}, got '{self.freeze}'"
-            )
+                f"stage '{self.name}': freeze must be one of {[m.value for m in FreezeMode]}, got '{self.freeze}'"
+            ) from None
         if self.max_epochs <= 0:
             raise ValueError(f"stage '{self.name}': max_epochs must be > 0")
 
@@ -119,8 +132,8 @@ class InferenceConfig:
 
 @dataclasses.dataclass
 class Config:
-    task: str
-    framework: str
+    task: Task
+    framework: Framework
     project_name: str
     output_dir: str
     seed: int
@@ -132,13 +145,19 @@ class Config:
     plot_every: int = 5
 
     def __post_init__(self) -> None:
-        if self.task not in VALID_TASKS:
-            raise ValueError(f"task must be one of {VALID_TASKS}, got '{self.task}'")
-        if self.framework not in VALID_FRAMEWORKS:
+        try:
+            self.task = Task(self.task)
+        except ValueError:
             raise ValueError(
-                f"framework must be one of {VALID_FRAMEWORKS}, got '{self.framework}'"
-            )
-        if self.framework == "rfdetr" and self.task == "classification":
+                f"task must be one of {[t.value for t in Task]}, got '{self.task}'"
+            ) from None
+        try:
+            self.framework = Framework(self.framework)
+        except ValueError:
+            raise ValueError(
+                f"framework must be one of {[f.value for f in Framework]}, got '{self.framework}'"
+            ) from None
+        if self.framework == Framework.RFDETR and self.task == Task.CLASSIFICATION:
             # rfdetr is a detection/segmentation library only — fail loudly
             # at config-load time instead of silently training the wrong thing.
             raise ValueError(
@@ -147,6 +166,11 @@ class Config:
             )
         if not self.training.stages:
             raise ValueError("training.stages must define at least one stage")
+
+    @property
+    def variant(self) -> str:
+        """Active model variant string — picks the sibling matching ``framework``."""
+        return self.model.yolo.variant if self.framework == Framework.YOLO else self.model.rfdetr.variant
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Config":
