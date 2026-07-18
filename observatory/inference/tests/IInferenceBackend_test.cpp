@@ -17,6 +17,14 @@ class StubInferenceBackend final : public IInferenceBackend {
     output = input;
   }
 
+  std::vector<Tensor> getInputTensorsDefault() override {
+    return {Tensor("x", {4}, TensorDataType::kFloat32)};
+  }
+
+  std::vector<Tensor> getOutputTensorsDefault() override {
+    return {Tensor("x", {4}, TensorDataType::kFloat32)};
+  }
+
   int run_calls_ = 0;
 };
 

@@ -11,8 +11,7 @@ interfaces; swapping models or backends is a config change, not a recompile.
 
 ## Interfaces (Strategy Pattern)
 - `IInferenceModel` — `load()`, `infer()`, `warmup()`, `metadata()`.
-  Implementations: `YOLOSegmentation`, `RFDETR`, `SAM` (future).
-- `ISegmenter` — segmentation-specific strategy (YOLO26, RF-DETR, FastSAM, SAM2).
+  Implementations: `YOLO`, `RFDETR`, `SAM` (future).
 - `IPreprocessor` — resize, normalize, padding, letterbox, color conversion,
   undistortion, ROI extraction. Model-independent.
 - `IPostprocessor` — NMS, mask decoding, polygon extraction, cloud/sky %

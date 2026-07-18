@@ -4,6 +4,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <print>
 #include <ranges>
 #include <stdexcept>
@@ -41,7 +42,12 @@ namespace observatory::inference
       case InferenceBackendType::kOnnxRuntimeOpenVINO:
         return "openvino";
       case InferenceBackendType::kOnnxRuntimeTensorRT:
-        return "nv_tensorrt_rtx";
+        // NVIDIA's TensorRT RTX EP plugin is built from a separate repo, not
+        // shipped by ONNX Runtime itself, and reports this exact string as
+        // its EpName() (see its RegisterExecutionProviderLibrary() usage
+        // example) - must match verbatim for the GetEpDevices() lookup below
+        // to find it.
+        return "NvTensorRTRTXExecutionProvider";
       default:
         return "";
       }
@@ -105,10 +111,16 @@ namespace observatory::inference
   struct OnnxRuntimeBackend::Impl
   {
     /// @copydoc OnnxRuntimeBackend::OnnxRuntimeBackend
-    Impl(const std::string &model_path, InferenceBackendType ep_type);
+    Impl(const std::string &model_path, const InferenceBackendType ep_type);
 
     /// @copydoc OnnxRuntimeBackend::run
     void Run(const std::vector<Tensor> &input, std::vector<Tensor> &output);
+
+    /// @copydoc OnnxRuntimeBackend::getInputTensorsDefault
+    std::vector<Tensor> getInputTensorsDefault();
+
+    /// @copydoc OnnxRuntimeBackend::getOutputTensorsDefault
+    std::vector<Tensor> getOutputTensorsDefault();
 
   private:
     /// @brief Registers every execution provider library shipped next to the
@@ -122,7 +134,7 @@ namespace observatory::inference
     ///   specific device(s) registered for `ep_type`.
     /// @throws std::runtime_error if `ep_type` is not an ONNX Runtime backend
     ///   type, or no device is found for its execution provider.
-    void SelectExecutionProvider(Ort::SessionOptions &session_options, InferenceBackendType ep_type);
+    void SelectExecutionProvider(Ort::SessionOptions &session_options, const InferenceBackendType ep_type);
 
     /// @brief Builds this frame's input/output Ort::Value tensors from
     ///   `input`/`output`, staging CPU->device copies where needed, and
@@ -150,6 +162,24 @@ namespace observatory::inference
     ///   equivalent.
     /// @throws std::logic_error if `dtype` has no known mapping.
     static ONNXTensorElementDataType ToOnnxElementType(const TensorDataType dtype);
+
+    /// @brief Inverse of ToOnnxElementType: maps an ONNX Runtime element type
+    ///   to its backend-agnostic equivalent.
+    /// @throws std::logic_error if `type` has no known mapping (e.g. a dtype
+    ///   TensorDataType doesn't cover yet).
+    static TensorDataType FromOnnxElementType(const ONNXTensorElementDataType type);
+
+    /// @brief Builds one Tensor per session input/output, named from `names`
+    ///   and shaped/typed from `get_type_info(i)`. Used by
+    ///   getInputTensorsDefault()/getOutputTensorsDefault(): the resulting Tensors
+    ///   are already sized right (Tensor's constructor allocates its buffer
+    ///   from shape+dtype), so callers can pass them straight to Run() to
+    ///   warm up the backend.
+    /// @details Dynamic dimensions (<= 0 in the session's declared shape,
+    ///   e.g. a symbolic batch axis) are pinned to 1, since Tensor requires
+    ///   every dimension to be positive.
+    static std::vector<Tensor> DescribeTensors(size_t count, const std::function<Ort::TypeInfo(size_t)> &get_type_info,
+                                                const std::vector<Ort::AllocatedStringPtr> &names);
 
     /// @brief Wraps `tensor`'s existing buffer as a non-owning Ort::Value at
     ///   `mem_info`, without copying or allocating.
@@ -252,7 +282,7 @@ namespace observatory::inference
     static inline const Ort::AllocatorWithDefaultOptions kCpuAllocator;
   };
 
-  OnnxRuntimeBackend::Impl::Impl(const std::string &model_path, InferenceBackendType ep_type)
+  OnnxRuntimeBackend::Impl::Impl(const std::string &model_path, const InferenceBackendType ep_type)
       : env_(std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "observatory")), run_options_(std::make_unique<Ort::RunOptions>())
   {
     if (!env_)
@@ -355,6 +385,41 @@ namespace observatory::inference
       Ort::ThrowOnError(compute_notification_->WaitOnDevice(compute_notification_.get(), *download_stream_.get()));
     }
     Postprocess(output);
+  }
+
+  std::vector<Tensor> OnnxRuntimeBackend::Impl::getInputTensorsDefault()
+  {
+    return DescribeTensors(
+        session_->GetInputCount(), [this](size_t i) { return session_->GetInputTypeInfo(i); }, input_names_);
+  }
+
+  std::vector<Tensor> OnnxRuntimeBackend::Impl::getOutputTensorsDefault()
+  {
+    return DescribeTensors(
+        session_->GetOutputCount(), [this](size_t i) { return session_->GetOutputTypeInfo(i); }, output_names_);
+  }
+
+  std::vector<Tensor> OnnxRuntimeBackend::Impl::DescribeTensors(size_t count, const std::function<Ort::TypeInfo(size_t)> &get_type_info,
+                                                                 const std::vector<Ort::AllocatedStringPtr> &names)
+  {
+    std::vector<Tensor> tensors;
+    tensors.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+      // Named on purpose: TypeInfo::GetTensorTypeAndShapeInfo() returns a
+      // *non-owning* view into type_info's own memory, so type_info has to
+      // outlive tensor_info - binding get_type_info(i) straight into a
+      // temporary would free that memory at the end of the full expression,
+      // leaving tensor_info dangling.
+      const Ort::TypeInfo type_info = get_type_info(i);
+      const auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+      std::vector<int64_t> shape = tensor_info.GetShape();
+      for (int64_t &dim : shape)
+        if (dim <= 0)
+          dim = 1;
+      tensors.emplace_back(names[i].get(), std::move(shape), FromOnnxElementType(tensor_info.GetElementType()));
+    }
+    return tensors;
   }
 
   void OnnxRuntimeBackend::Impl::Preprocess(const std::vector<Tensor> &input, std::vector<Tensor> &output)
@@ -461,7 +526,7 @@ namespace observatory::inference
     // table instead of building strings with std::format at runtime.
 #if defined(_WIN32)
     static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> kProviderLibraries{{
-        {"nv_tensorrt_rtx", "onnxruntime_providers_nv_tensorrt_rtx.dll"},
+        {"NvTensorRTRTXExecutionProvider", "onnxruntime_providers_nv_tensorrt_rtx.dll"},
         {"cuda", "onnxruntime_providers_cuda.dll"},
         {"openvino", "onnxruntime_providers_openvino.dll"},
         {"qnn", "onnxruntime_providers_qnn.dll"},
@@ -469,7 +534,7 @@ namespace observatory::inference
     }};
 #else
     static constexpr std::array<std::pair<std::string_view, std::string_view>, 5> kProviderLibraries{{
-        {"nv_tensorrt_rtx", "libonnxruntime_providers_nv_tensorrt_rtx.so"},
+        {"NvTensorRTRTXExecutionProvider", "libonnxruntime_providers_nv_tensorrt_rtx.so"},
         {"cuda", "libonnxruntime_providers_cuda.so"},
         {"openvino", "libonnxruntime_providers_openvino.so"},
         {"qnn", "libonnxruntime_providers_qnn.so"},
@@ -496,7 +561,7 @@ namespace observatory::inference
     }
   }
 
-  void OnnxRuntimeBackend::Impl::SelectExecutionProvider(Ort::SessionOptions &session_options, InferenceBackendType ep_type)
+  void OnnxRuntimeBackend::Impl::SelectExecutionProvider(Ort::SessionOptions &session_options, const InferenceBackendType ep_type)
   {
     if (!env_)
       throw std::runtime_error("OnnxRuntimeBackend::SelectExecutionProvider: env_ is null");
@@ -572,6 +637,21 @@ namespace observatory::inference
     throw std::logic_error("ToOnnxElementType: unhandled TensorDataType");
   }
 
+  TensorDataType OnnxRuntimeBackend::Impl::FromOnnxElementType(const ONNXTensorElementDataType type)
+  {
+    switch (type)
+    {
+    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+      return TensorDataType::kFloat32;
+    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+      return TensorDataType::kInt64;
+    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+      return TensorDataType::kUInt8;
+    default:
+      throw std::logic_error(std::format("FromOnnxElementType: unsupported ONNXTensorElementDataType {}", std::to_underlying(type)));
+    }
+  }
+
   Ort::Value OnnxRuntimeBackend::Impl::CreateOrtValue(const OrtMemoryInfo *mem_info, Tensor &tensor)
   {
     const std::vector<int64_t> &shape = tensor.shape();
@@ -580,7 +660,7 @@ namespace observatory::inference
 
   // --- OnnxRuntimeBackend: thin forwarding to Impl ---------------------------
 
-  OnnxRuntimeBackend::OnnxRuntimeBackend(const std::string &model_path, InferenceBackendType ep_type)
+  OnnxRuntimeBackend::OnnxRuntimeBackend(const std::string &model_path, const InferenceBackendType ep_type)
       : p_impl_(std::make_unique<Impl>(model_path, ep_type))
   {
   }
@@ -590,6 +670,16 @@ namespace observatory::inference
   void OnnxRuntimeBackend::run(const std::vector<Tensor> &input, std::vector<Tensor> &output)
   {
     p_impl_->Run(input, output);
+  }
+
+  std::vector<Tensor> OnnxRuntimeBackend::getInputTensorsDefault()
+  {
+    return p_impl_->getInputTensorsDefault();
+  }
+
+  std::vector<Tensor> OnnxRuntimeBackend::getOutputTensorsDefault()
+  {
+    return p_impl_->getOutputTensorsDefault();
   }
 
 } // namespace observatory::inference

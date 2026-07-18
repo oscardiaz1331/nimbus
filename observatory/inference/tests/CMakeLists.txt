@@ -1,8 +1,8 @@
 add_executable(observatory_inference_tests
   IInferenceModel_test.cpp
-  ISegmenter_test.cpp
   IInferenceBackend_test.cpp
   OnnxRuntimeBackend_test.cpp
+  YoloModel_test.cpp
   Tensor_test.cpp
 )
 target_compile_definitions(observatory_inference_tests PRIVATE

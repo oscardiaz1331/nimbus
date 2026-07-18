@@ -3,11 +3,17 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace observatory::inference {
 namespace {
+
+std::filesystem::path FixtureModelPath() {
+  return std::filesystem::path(OBSERVATORY_TEST_FIXTURES_DIR) / "yolo11n-seg.onnx";
+}
 
 TEST(OnnxRuntimeBackend, ThrowsOnMissingFile) {
   EXPECT_THROW(OnnxRuntimeBackend backend("/nonexistent/path/model.onnx"), std::runtime_error);
@@ -33,7 +39,7 @@ TEST(OnnxRuntimeBackend, ThrowsOnNonOnnxExtension) {
 // detections); output1 [1,32,152,152] is the mask prototype tensor. Swap
 // these if the fixture is ever re-exported with different settings.
 TEST(OnnxRuntimeBackendRealModel, RunsYolo11nSeg) {
-  const std::filesystem::path model_path = std::filesystem::path(OBSERVATORY_TEST_FIXTURES_DIR) / "yolo11n-seg.onnx";
+  const std::filesystem::path model_path = FixtureModelPath();
   if (!std::filesystem::exists(model_path)) {
     GTEST_SKIP() << "fixture not found at " << model_path << " - see the comment above this test for how to generate it";
   }
@@ -48,6 +54,57 @@ TEST(OnnxRuntimeBackendRealModel, RunsYolo11nSeg) {
   OnnxRuntimeBackend backend(model_path.string(), InferenceBackendType::kOnnxRuntimeBest);
   EXPECT_NO_THROW(backend.run(input, output));
 }
+
+// Exercises OnnxRuntimeBackend pinned to a specific execution provider,
+// unlike RunsYolo11nSeg above which lets ONNX Runtime auto-select. GTEST_SKIPs
+// rather than failing when the requested EP has no matching device on this
+// machine - e.g. CUDA without cuDNN installed, or TensorRT-RTX before its EP
+// plugin (built from a separate repo - see EpRegistrationName() in
+// OnnxRuntimeBackend.cpp) is present - since not every machine running this
+// suite has every EP wired up. Once the EP becomes available, this same test
+// starts exercising real hardware without any code change.
+class OnnxRuntimeBackendEp : public ::testing::TestWithParam<InferenceBackendType> {};
+
+TEST_P(OnnxRuntimeBackendEp, RunsYolo11nSeg) {
+  const std::filesystem::path model_path = FixtureModelPath();
+  if (!std::filesystem::exists(model_path)) {
+    GTEST_SKIP() << "fixture not found at " << model_path
+                 << " - see the comment on OnnxRuntimeBackendRealModel.RunsYolo11nSeg for how to generate it";
+  }
+
+  std::unique_ptr<OnnxRuntimeBackend> backend;
+  try {
+    backend = std::make_unique<OnnxRuntimeBackend>(model_path.string(), GetParam());
+  } catch (const std::runtime_error &ex) {
+    GTEST_SKIP() << "execution provider unavailable on this machine: " << ex.what();
+  }
+
+  std::vector<Tensor> input;
+  input.emplace_back("images", std::vector<int64_t>{1, 3, 608, 608}, TensorDataType::kFloat32);
+
+  std::vector<Tensor> output;
+  output.emplace_back("output0", std::vector<int64_t>{1, 300, 38}, TensorDataType::kFloat32);
+  output.emplace_back("output1", std::vector<int64_t>{1, 32, 152, 152}, TensorDataType::kFloat32);
+
+  EXPECT_NO_THROW(backend->run(input, output));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ExecutionProviders, OnnxRuntimeBackendEp,
+    ::testing::Values(InferenceBackendType::kOnnxRuntimeCPU, InferenceBackendType::kOnnxRuntimeCUDA,
+                       InferenceBackendType::kOnnxRuntimeTensorRT),
+    [](const ::testing::TestParamInfo<InferenceBackendType> &info) -> std::string {
+      switch (info.param) {
+        case InferenceBackendType::kOnnxRuntimeCPU:
+          return "CPU";
+        case InferenceBackendType::kOnnxRuntimeCUDA:
+          return "CUDA";
+        case InferenceBackendType::kOnnxRuntimeTensorRT:
+          return "TensorRT_RTX";
+        default:
+          return "Unknown";
+      }
+    });
 
 }  // namespace
 }  // namespace observatory::inference

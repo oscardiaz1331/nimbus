@@ -1,6 +1,7 @@
 add_library(observatory_inference STATIC
   src/OnnxRuntimeBackend.cpp
   src/Tensor.cpp
+  src/YoloModel.cpp
 )
 add_library(observatory::inference ALIAS observatory_inference)
 

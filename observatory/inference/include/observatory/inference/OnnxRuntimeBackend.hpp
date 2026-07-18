@@ -31,7 +31,7 @@ namespace observatory::inference
     /// @throws std::runtime_error if `model_path` is not a valid .onnx file,
     ///   `ep_type` is not an ONNX Runtime backend type, or session creation
     ///   fails (e.g. no device found for the requested execution provider).
-    explicit OnnxRuntimeBackend(const std::string &model_path, InferenceBackendType ep_type = InferenceBackendType::kOnnxRuntimeBest);
+    explicit OnnxRuntimeBackend(const std::string &model_path, const InferenceBackendType ep_type = InferenceBackendType::kOnnxRuntimeBest);
 
     /// @brief Defined out-of-line in the .cpp: with the pImpl idiom, Impl
     ///   must be a complete type wherever std::unique_ptr<Impl> is
@@ -44,6 +44,14 @@ namespace observatory::inference
     /// @param[in] input Preprocessed input tensors, one per model input.
     /// @param[in,out] output Pre-shaped output tensors; filled in place.
     void run(const std::vector<Tensor> &input, std::vector<Tensor> &output) override;
+
+    /// @brief Builds one Tensor per model input, named and shaped from the
+    ///   session's declared input metadata (dynamic dimensions, if any, are
+    ///   pinned to 1) and pre-allocated to match.
+    std::vector<Tensor> getInputTensorsDefault() override;
+
+    /// @copydoc getInputTensorsDefault
+    std::vector<Tensor> getOutputTensorsDefault() override;
 
   private:
     struct Impl;

@@ -10,12 +10,14 @@ namespace {
 
 class StubInferenceModel final : public IInferenceModel {
  public:
-  bool load(const std::string& model_path) override {
+  StubInferenceModel(const std::string& model_path) {
     last_path_ = model_path;
-    return true;
   }
   void warmup(int iterations) override { warmup_calls_ += iterations; }
-  void infer() override { ++infer_calls_; }
+  std::expected<std::vector<Tensor>, std::string> infer(const std::vector<Tensor> &input) override {
+    ++infer_calls_;
+    return input;
+  }
   std::string metadata() const override { return "stub"; }
 
   std::string last_path_;
@@ -29,12 +31,11 @@ TEST(IInferenceModel, IsAbstract) {
 }
 
 TEST(IInferenceModel, StubSatisfiesFullContract) {
-  StubInferenceModel model;
-  EXPECT_TRUE(model.load("model.onnx"));
+  StubInferenceModel model{"model.onnx"};
   EXPECT_EQ(model.last_path_, "model.onnx");
   model.warmup(3);
   EXPECT_EQ(model.warmup_calls_, 3);
-  model.infer();
+  model.infer({});
   EXPECT_EQ(model.infer_calls_, 1);
   EXPECT_EQ(model.metadata(), "stub");
 }

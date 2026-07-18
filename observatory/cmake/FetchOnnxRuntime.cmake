@@ -78,10 +78,20 @@ else()
     INTERFACE_LINK_OPTIONS "-Wl,-rpath,${onnxruntime_SOURCE_DIR}/lib"
   )
 
-  # No-op on Linux: rpath above already makes every .so in lib/ (including
-  # libonnxruntime_providers_shared.so) resolvable, so there's nothing to
-  # copy. Exists so app/ and inference/tests/ can call it unconditionally.
+  # rpath above already makes libonnxruntime.so's own dependencies (e.g.
+  # libonnxruntime_providers_shared.so) resolvable, so nothing to do for
+  # those. But OnnxRuntimeBackend::Impl::RegisterExecutionProviders() looks
+  # for EP libraries (cuda, tensorrt, openvino, ...) next to the running
+  # executable itself (see GetExecutablePath() in OnnxRuntimeBackend.cpp) -
+  # rpath doesn't help there, so those still need copying, same as Windows'
+  # DLLs below.
+  file(GLOB _observatory_ort_provider_libs "${onnxruntime_SOURCE_DIR}/lib/libonnxruntime_providers_*.so")
   function(observatory_copy_onnxruntime_dlls target)
+    if(_observatory_ort_provider_libs)
+      add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_observatory_ort_provider_libs} "$<TARGET_FILE_DIR:${target}>"
+      )
+    endif()
   endfunction()
 endif()
 
