@@ -18,11 +18,12 @@ class StubInferenceModel final : public IInferenceModel {
     ++infer_calls_;
     return input;
   }
-  std::string metadata() const override { return "stub"; }
+  const ModelMetadata& metadata() const override { return metadata_; }
 
   std::string last_path_;
   int warmup_calls_ = 0;
   int infer_calls_ = 0;
+  ModelMetadata metadata_;
 };
 
 TEST(IInferenceModel, IsAbstract) {
@@ -37,7 +38,7 @@ TEST(IInferenceModel, StubSatisfiesFullContract) {
   EXPECT_EQ(model.warmup_calls_, 3);
   model.infer({});
   EXPECT_EQ(model.infer_calls_, 1);
-  EXPECT_EQ(model.metadata(), "stub");
+  EXPECT_EQ(&model.metadata(), &model.metadata_);
 }
 
 }  // namespace

@@ -7,7 +7,6 @@ target_link_libraries(observatory PRIVATE
   observatory::inference
   observatory::postprocessing
   observatory::tracking
-  observatory::telemetry
   observatory::storage
   observatory::configuration
   observatory::logging

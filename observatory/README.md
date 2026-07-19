@@ -12,22 +12,36 @@ backend, or camera is a config change, not a recompile. See
 
 ```
 observatory/
-├── camera/          # consumes eyes/ through an interface — placeholder
-├── preprocessing/    # resize/normalize/letterbox/undistort — placeholder
+├── camera/            # ICamera strategy — implemented
+│   ├── include/observatory/camera/
+│   │   ├── ICamera.hpp       # trigger() -> one frame
+│   │   └── FileCamera.hpp    # replays images from disk (config'd path list + loop)
+│   └── src/FileCamera.cpp
+├── preprocessing/     # IPreprocessor strategy — implemented
+│   ├── include/observatory/preprocessing/
+│   │   ├── IPreprocessor.hpp       # process() -> tensors + per-image PreprocessContext
+│   │   └── YoloSegPreprocessor.hpp # letterbox resize, BGR->RGB, HWC->CHW, normalize
+│   └── src/YoloSegPreprocessor.cpp
 ├── inference/         # ONNX Runtime backend — implemented
 │   ├── include/observatory/inference/
 │   │   ├── IInferenceModel.hpp    # load()/infer()/warmup()/metadata()
+│   │   ├── YoloModel.hpp          # IInferenceModel for YOLO detection/segmentation exports
 │   │   ├── IInferenceBackend.hpp  # ONNX Runtime/TensorRT/OpenVINO strategy
-│   │   ├── Tensor.hpp             # backend-agnostic named tensor
+│   │   ├── Tensor.hpp             # backend-agnostic named tensor (span/mdspan views)
 │   │   └── OnnxRuntimeBackend.hpp # pImpl - no ORT types leak into this header
 │   └── src/
 │       ├── Tensor.cpp
+│       ├── YoloModel.cpp
 │       └── OnnxRuntimeBackend.cpp # EP selection, IoBinding, CPU<->device
 │                                   #   sync-stream pipeline (upload/compute/
 │                                   #   download), device-agnostic memory
-├── postprocessing/   # NMS/masks/cloud-% stats — placeholder
-├── tracking/          # temporal tracking (Stage 5, not started) — placeholder
-├── telemetry/         # LoRa sensor node data — placeholder
+├── postprocessing/    # IPostprocessor strategy — implemented
+│   ├── include/observatory/postprocessing/
+│   │   ├── IPostprocessor.hpp       # process() -> per-image vector<Detection>
+│   │   ├── Detection.hpp            # box, class_id, score, mask_coeffs, seg_masks
+│   │   └── YoloSegPostprocessor.hpp # NMS (embedded or manual) + mask decoding
+│   └── src/YoloSegPostprocessor.cpp
+├── tracking/          # ITracker — stub interface only (Stage 5, not started)
 ├── storage/           # local persistence before the POST to web/ — placeholder
 ├── configuration/     # config-driven camera/model/backend/… — placeholder
 ├── logging/           # placeholder
@@ -37,13 +51,20 @@ observatory/
 └── CMakePresets.json   # debug / release / debug-cuda
 ```
 
-`inference/` is the only module with a real implementation so far
-(`OnnxRuntimeBackend`: execution-provider registration and selection across
-CPU/CUDA/TensorRT/OpenVINO/QNN/CANN, `IoBinding`, per-tensor CPU-vs-device
-placement resolved once at construction, and an upload/compute/download
-`OrtSyncStream` + notification pipeline for async CPU↔device transfers with
-a synchronous fallback when an EP doesn't support streams). Every other
-module is a `placeholder.cpp` stub that proves the CMake target links.
+`camera/`, `preprocessing/`, `inference/`, and `postprocessing/` each have a
+real strategy implementation and a GoogleTest suite. `tracking/` only has
+the `ITracker` shell (no method yet — temporal tracking isn't scheduled
+until Stage 5). `storage/`, `configuration/`, `logging/`, and
+`communication/` are still `placeholder.cpp` stubs that just prove their
+CMake target links. Nothing wires these modules together into a live
+capture → infer → postprocess pipeline yet — that's the next step once
+`configuration/` and `communication/` exist.
+
+Note: LoRa sensor-node telemetry is not part of this repo. Those nodes POST
+straight to `web/`'s `/api/v1/nodes/telemetry` (auto-registering on first
+contact) — `observatory/`'s camera is a direct CSI/USB attachment to the Pi
+it runs on, so there's no LoRa hop, and no telemetry-ingest module, on this
+side.
 
 ## Requirements
 
@@ -209,7 +230,7 @@ hasn't been added here yet.
 
 ## Running
 
-`app/` links all ten modules into a single `observatory` executable. Right
+`app/` links all nine modules into a single `observatory` executable. Right
 now it's only a toolchain smoke test (prints OpenCV/Eigen/ONNX Runtime
 versions and confirms everything links and runs) — the real capture → infer
 → postprocess → communicate pipeline isn't wired up yet.

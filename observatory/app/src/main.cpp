@@ -1,4 +1,4 @@
-// Aggregate stub executable: links all 10 observatory modules plus
+// Aggregate stub executable: links all 9 observatory modules plus
 // OpenCV/Eigen/ONNX Runtime and proves the whole toolchain actually runs
 // (not just configures/links) — in particular that the ONNX Runtime
 // shared library fetched by cmake/FetchOnnxRuntime.cmake is found at
@@ -25,6 +25,6 @@ int main() {
   std::printf("OpenCV cv::Mat constructed: %dx%d, %d channels\n", frame.rows, frame.cols,
               frame.channels());
 
-  std::printf("observatory: 10/10 modules linked\n");
+  std::printf("observatory: 9/9 modules linked\n");
   return 0;
 }

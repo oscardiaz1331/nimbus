@@ -1,5 +1,6 @@
 add_executable(observatory_camera_tests
-  CameraModule_test.cpp
+  ICamera_test.cpp
+  FileCamera_test.cpp
 )
 target_link_libraries(observatory_camera_tests PRIVATE
   observatory::camera

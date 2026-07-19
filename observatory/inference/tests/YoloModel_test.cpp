@@ -39,6 +39,19 @@ TEST(YoloModelRealModel, WarmupAndInferSucceed) {
   EXPECT_EQ((*result)[1].shape(), (std::vector<int64_t>{1, 32, 152, 152}));
 }
 
+TEST(YoloModelRealModel, MetadataReportsInputSizeFromBackendTensorShape) {
+  const std::filesystem::path model_path = FixtureModelPath();
+  if (!std::filesystem::exists(model_path)) {
+    GTEST_SKIP() << "fixture not found at " << model_path
+                 << " - see OnnxRuntimeBackend_test.cpp for how to generate it";
+  }
+
+  YoloModel model(model_path.string(), InferenceBackendType::kOnnxRuntimeBest);
+
+  // Fixture's declared input shape is [1,3,608,608] (see the comment above).
+  EXPECT_EQ(model.metadata().input_size, 608);
+}
+
 TEST(YoloModelRealModel, InferRejectsWrongInputCount) {
   const std::filesystem::path model_path = FixtureModelPath();
   if (!std::filesystem::exists(model_path)) {

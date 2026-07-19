@@ -10,6 +10,9 @@ Business logic never depends on a specific model. Everything goes through
 interfaces; swapping models or backends is a config change, not a recompile.
 
 ## Interfaces (Strategy Pattern)
+- `ICamera` — `trigger()` captures one frame. Implementations: `FileCamera`
+  (replays images from disk — no hardware needed, also used for remote
+  testing), a real `eyes/` hardware bridge (future).
 - `IInferenceModel` — `load()`, `infer()`, `warmup()`, `metadata()`.
   Implementations: `YOLO`, `RFDETR`, `SAM` (future).
 - `IPreprocessor` — resize, normalize, padding, letterbox, color conversion,
@@ -31,17 +34,20 @@ interfaces; swapping models or backends is a config change, not a recompile.
 
 ## Module layout
 ```
-camera/          # consumes eyes/ through an interface, not owned here
-preprocessing/
-inference/
-postprocessing/
-tracking/
-telemetry/
-storage/
-configuration/
-logging/
-communication/
+camera/          # consumes eyes/ through an interface, not owned here — implemented (FileCamera)
+preprocessing/    # implemented (YoloSegPreprocessor)
+inference/        # implemented (YoloModel + OnnxRuntimeBackend)
+postprocessing/   # implemented (YoloSegPostprocessor)
+tracking/         # ITracker stub only, no method yet — see Open/not decided
+storage/          # placeholder
+configuration/    # placeholder
+logging/          # placeholder
+communication/     # placeholder
 ```
+Camera → preprocessing → inference → postprocessing each have a real
+strategy + tests. Nothing wires them into a live pipeline yet — that needs
+`configuration/` (to drive camera/model/backend choice) and
+`communication/` (to POST results out) first.
 
 ## Benchmark module
 Every model reports automatically: FPS, latency (avg/min/max), GPU memory,
@@ -49,8 +55,9 @@ CPU, RAM, warm-up time, accuracy. Model choice is benchmark-driven, not
 assumed.
 
 ## Config
-Nothing hardcoded: camera, model, thresholds, backend, sensor frequency,
-LoRa params, storage, logging — all config-driven.
+Nothing hardcoded: camera, model, thresholds, backend, capture frequency,
+storage, logging — all config-driven. LoRa sensor nodes are a `web/`
+concern (they POST straight to its API) — not something this repo touches.
 
 ## Where it sits in the pipeline
 ```

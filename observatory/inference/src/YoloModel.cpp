@@ -10,6 +10,10 @@ namespace observatory::inference
         backend_ = std::make_unique<OnnxRuntimeBackend>(model_path, ep_type);
         default_input_ = backend_->getInputTensorsDefault();
         default_output_ = backend_->getOutputTensorsDefault();
+
+        // Input shape is (batch, channels, H, W); the last dim (W) is the
+        // network's input side length (YOLO exports are square).
+        metadata_.input_size = static_cast<int>(default_input_.front().shape().back());
     }
 
     void YoloModel::warmup(int iterations)
@@ -35,12 +39,9 @@ namespace observatory::inference
         return output;
     }
 
-    std::string YoloModel::metadata() const
+    const YoloModelMetadata &YoloModel::metadata() const
     {
-        // TODO(design): surface the .onnx-embedded metadata once
-        // IInferenceModel::metadata()'s schema is finalized - see the TODO on
-        // that declaration. No source for it wired up yet.
-        return "";
+        return metadata_;
     }
 
 } // namespace observatory::inference
