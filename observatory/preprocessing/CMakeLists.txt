@@ -1,5 +1,5 @@
 add_library(observatory_preprocessing STATIC
-  src/placeholder.cpp
+  src/YoloSegPreprocessor.cpp
 )
 add_library(observatory::preprocessing ALIAS observatory_preprocessing)
 
@@ -10,6 +10,7 @@ target_include_directories(observatory_preprocessing PUBLIC
 target_link_libraries(observatory_preprocessing PUBLIC
   ${OpenCV_LIBS}
   Eigen3::Eigen
+  observatory::inference
 )
 
 observatory_set_warnings(observatory_preprocessing)
