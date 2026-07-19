@@ -75,8 +75,8 @@ namespace observatory::postprocessing
             {
                 return dets_view[batch_idx, detection_idx, 4] >= threshold_;
             };
-
-            for (const int64_t detection_idx : std::views::iota(int64_t{0}, max_detections) | std::views::filter(above_threshold))
+            // Using ::take_while instead of ::filter because the detections are ordered by threshold, so we can break the loop
+            for (const int64_t detection_idx : std::views::iota(int64_t{0}, max_detections) | std::views::take_while(above_threshold))
             {
                 //@todo check if they are ordered by threshold, so this can be a break
                 const cv::Rect2f raw_box(cv::Point2f(dets_view[batch_idx, detection_idx, 0], dets_view[batch_idx, detection_idx, 1]),
