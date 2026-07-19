@@ -6,10 +6,15 @@ namespace observatory::postprocessing
 {
     struct YoloSegPostprocessorConfig
     {
-        size_t num_classes;
+        int num_classes;
         bool nms_embedded;
         float threshold;
         size_t image_size;
+        // IoU threshold for manual (non-embedded) NMS: two boxes of the same
+        // class with IoU above this are treated as duplicates and the
+        // lower-scoring one is suppressed. Unused when nms_embedded is true,
+        // since NMS already ran inside the ONNX graph in that case.
+        float nms_threshold;
     };
 
     class YoloSegPostprocessor final : public IPostprocessor
@@ -17,7 +22,8 @@ namespace observatory::postprocessing
     public:
         explicit YoloSegPostprocessor(const YoloSegPostprocessorConfig &config)
             : process_dets_(config.nms_embedded ? &YoloSegPostprocessor::processDetsWithNMS : &YoloSegPostprocessor::processDetsNoNMS),
-              num_classes_(config.num_classes), nms_embedded_(config.nms_embedded), threshold_(config.threshold), image_size_(config.image_size) {}
+              num_classes_(config.num_classes), nms_embedded_(config.nms_embedded), threshold_(config.threshold), image_size_(config.image_size),
+              nms_threshold_(config.nms_threshold) {}
         std::expected<std::vector<std::vector<Detection>>, std::string> process(const std::vector<inference::Tensor> &outputs) override;
 
     private:
@@ -34,10 +40,12 @@ namespace observatory::postprocessing
         //                                       not softmax — more than one class
         //                                       can be high at once)
         //                     [4+nc:4+nc+nm) = nm mask coefficients
-        // Requires manual NMS downstream (not deduplicated). Once that NMS
-        // is written, this should build the same per-detection records
-        // (box, class_id, score, mask_coeffs) as processDetsWithNMS —
-        // decodeMasks() below doesn't care which export mode produced them.
+        // Not deduplicated by the model, so this performs manual per-class
+        // NMS (argmax the per-class scores, threshold, IoU-suppress via
+        // cv::dnn::NMSBoxesBatched) before returning. Builds the same
+        // per-detection records (box, class_id, score, mask_coeffs) as
+        // processDetsWithNMS — decodeMasks() doesn't care which export mode
+        // produced them.
         std::vector<std::vector<Detection>> processDetsNoNMS(const inference::Tensor &dets);
 
         // Detections tensor ("output0"), export WITH embedded NMS (nms=True).
@@ -75,9 +83,10 @@ namespace observatory::postprocessing
         using ProcessDetsFn = std::vector<std::vector<Detection>> (YoloSegPostprocessor::*)(const inference::Tensor &);
         ProcessDetsFn process_dets_;
 
-        size_t num_classes_;
+        int num_classes_;
         bool nms_embedded_;
         float threshold_;
         size_t image_size_;
+        float nms_threshold_;
     };
 } // namespace observatory::postprocessing
