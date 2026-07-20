@@ -1,19 +1,45 @@
 #include "observatory/inference/YoloModel.hpp"
-#include "observatory/inference/OnnxRuntimeBackend.hpp" // todo change the ORT construction to a proper IInference-Backend builder.
+#include <charconv>
 #include <format>
+#include <utility>
 
 namespace observatory::inference
 {
-    // todo change the ORT construction to a proper IInference-Backend builder.
-    YoloModel::YoloModel(const std::string &model_path, const InferenceBackendType ep_type)
+    YoloModel::YoloModel(std::unique_ptr<IInferenceBackend> backend)
     {
-        backend_ = std::make_unique<OnnxRuntimeBackend>(model_path, ep_type);
+        backend_ = std::move(backend);
         default_input_ = backend_->getInputTensorsDefault();
         default_output_ = backend_->getOutputTensorsDefault();
 
+        metadata_ = ParseMetadata(backend_->getMetadata());
         // Input shape is (batch, channels, H, W); the last dim (W) is the
-        // network's input side length (YOLO exports are square).
+        // network's input side length (YOLO exports are square). Derived
+        // straight from the graph itself, not from embedded metadata - always
+        // present, unlike num_classes/nms_embedded above.
         metadata_.input_size = static_cast<int>(default_input_.front().shape().back());
+    }
+
+    YoloModelMetadata YoloModel::ParseMetadata(const std::unordered_map<std::string, std::string> &raw)
+    {
+        YoloModelMetadata metadata;
+
+        if (const auto it = raw.find("num_classes"); it != raw.end())
+        {
+            int value = 0;
+            const auto [ptr, ec] = std::from_chars(it->second.data(), it->second.data() + it->second.size(), value);
+            if (ec == std::errc{} && ptr == it->second.data() + it->second.size())
+                metadata.num_classes = value;
+        }
+
+        if (const auto it = raw.find("nms_embedded"); it != raw.end())
+        {
+            if (it->second == "true")
+                metadata.nms_embedded = true;
+            else if (it->second == "false")
+                metadata.nms_embedded = false;
+        }
+
+        return metadata;
     }
 
     void YoloModel::warmup(int iterations)

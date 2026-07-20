@@ -316,3 +316,6 @@ datasets/
 ## Visual Studio and Visual Studio Code gitignore template
 .vs/
 .vscode/
+
+## Observatory models
+observatory/models/

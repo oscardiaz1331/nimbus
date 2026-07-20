@@ -1,0 +1,17 @@
+%YAML:1.0
+---
+# See observatory/configuration/include/observatory/configuration/Config.hpp
+# for the full field list and defaults.
+
+# Path to the .onnx model to load.
+model_path: "models/model.onnx"
+
+# "onnx-cpu" pins ONNX Runtime's CPU execution provider - always available,
+# no GPU/driver required. Other options: "onnx" (auto EP selection),
+# "onnx-cuda", "onnx-tensorrt", "onnx-openvino".
+backend: "onnx-cpu"
+
+# Postprocessing thresholds (score / NMS IoU) - not derivable from the
+# model itself, see PipelineFactory.cpp.
+conf_threshold: 0.25
+nms_threshold: 0.45

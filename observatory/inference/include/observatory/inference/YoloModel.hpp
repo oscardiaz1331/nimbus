@@ -2,6 +2,10 @@
 
 #include <vector>
 #include <expected>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
 
 #include "observatory/inference/IInferenceBackend.hpp"
 #include "observatory/inference/IInferenceModel.hpp"
@@ -18,12 +22,28 @@ struct YoloModelMetadata : ModelMetadata {
   // YoloSegPreprocessorConfig::target_size / YoloSegPostprocessorConfig::
   // image_size.
   int input_size = 0;
+
+  // The rest comes from the .onnx's custom metadata (see
+  // academy/utils/optimizers/metadata.py), which not every model file has
+  // (older exports, or one produced before that pipeline stage existed) -
+  // nullopt means "not present", not "false"/"zero", so a configuration/
+  // factory can tell "derive from the model" apart from "fall back to
+  // user config" instead of silently trusting a guessed default.
+  std::optional<int> num_classes;
+  std::optional<bool> nms_embedded;
 };
 
 class YoloModel final : public IInferenceModel
 {
     public:
-    YoloModel(const std::string &model_path, const InferenceBackendType ep_type);
+    // Takes ownership of an already-built backend rather than constructing
+    // one itself: which concrete IInferenceBackend to build (and from what
+    // model path/execution provider) is a decision that has to happen
+    // *before* we even know this is a YOLO model - a configuration/ factory
+    // builds the backend first, reads its raw getMetadata()["framework"] to
+    // decide YoloModel is the right wrapper, then hands that same backend
+    // here instead of opening the model file a second time.
+    explicit YoloModel(std::unique_ptr<IInferenceBackend> backend);
     ~YoloModel() = default;
 
     void warmup(int iterations) override;
@@ -31,6 +51,14 @@ class YoloModel final : public IInferenceModel
     std::expected<std::vector<Tensor>, std::string> infer(const std::vector<Tensor>& input_tensors) override;
 
     const YoloModelMetadata &metadata() const override;
+
+    // Parses the handful of keys YoloModelMetadata cares about out of a
+    // backend's raw getMetadata() map (see IInferenceBackend::getMetadata).
+    // Public and static so it's testable directly against a hand-built map,
+    // without needing a real backend/model file. A key that's missing or
+    // fails to parse is left as std::nullopt rather than defaulted, since a
+    // malformed value is exactly as "not there" as a missing one here.
+    static YoloModelMetadata ParseMetadata(const std::unordered_map<std::string, std::string> &raw);
 
     private:
     std::vector<Tensor> default_input_, default_output_;

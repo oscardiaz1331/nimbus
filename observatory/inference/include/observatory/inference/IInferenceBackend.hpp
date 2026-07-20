@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
 #include <opencv2/core.hpp>
 
 #include "observatory/inference/Tensor.hpp"
@@ -32,6 +35,15 @@ class IInferenceBackend {
   // to run(), instead of hardcoding shapes per model.
   virtual std::vector<Tensor> getInputTensorsDefault() = 0;
   virtual std::vector<Tensor> getOutputTensorsDefault() = 0;
+
+  // Raw custom key/value metadata embedded in the model file by the
+  // exporting pipeline (see academy/utils/optimizers/metadata.py) - exactly
+  // as written, un-decoded (non-string values there are JSON-encoded
+  // strings; it's up to the caller, e.g. YoloModel, to parse the handful of
+  // keys it actually cares about). Empty if the backend found nothing (an
+  // older export predating this, or a backend that doesn't support reading
+  // it at all) - never a hard failure, this is descriptive metadata.
+  virtual std::unordered_map<std::string, std::string> getMetadata() = 0;
 };
 
 }  // namespace observatory::inference

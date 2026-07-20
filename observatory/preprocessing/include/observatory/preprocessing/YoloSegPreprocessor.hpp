@@ -7,7 +7,7 @@ namespace observatory::preprocessing
 
     struct YoloSegPreprocessorConfig
     {
-        int stride;
+        int stride = 32;;
         int target_size;
     };
 

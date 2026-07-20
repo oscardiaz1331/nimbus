@@ -25,6 +25,8 @@ class StubInferenceBackend final : public IInferenceBackend {
     return {Tensor("x", {4}, TensorDataType::kFloat32)};
   }
 
+  std::unordered_map<std::string, std::string> getMetadata() override { return {{"key", "value"}}; }
+
   int run_calls_ = 0;
 };
 
@@ -40,6 +42,13 @@ TEST(IInferenceBackend, StubSatisfiesContract) {
   backend.run(input, output);
   EXPECT_EQ(backend.run_calls_, 1);
   EXPECT_EQ(output.size(), 1U);
+}
+
+TEST(IInferenceBackend, GetMetadataReturnsBackendRawMap) {
+  StubInferenceBackend backend;
+  const auto metadata = backend.getMetadata();
+  ASSERT_EQ(metadata.count("key"), 1U);
+  EXPECT_EQ(metadata.at("key"), "value");
 }
 
 }  // namespace

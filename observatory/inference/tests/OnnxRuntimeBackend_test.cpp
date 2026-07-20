@@ -6,6 +6,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace observatory::inference {
@@ -53,6 +54,23 @@ TEST(OnnxRuntimeBackendRealModel, RunsYolo11nSeg) {
 
   OnnxRuntimeBackend backend(model_path.string(), InferenceBackendType::kOnnxRuntimeBest);
   EXPECT_NO_THROW(backend.run(input, output));
+}
+
+// getMetadata() reads whatever custom metadata_props academy embedded (see
+// academy/utils/optimizers/metadata.py) - this fixture may or may not have
+// any, depending on when it was (re)generated, so this only checks the call
+// itself is safe (no throw, a plain map back) rather than asserting specific
+// keys. YoloModel_test.cpp's ParseMetadata tests cover the actual parsing
+// against a hand-built map, independent of what this binary fixture has.
+TEST(OnnxRuntimeBackendRealModel, GetMetadataDoesNotThrow) {
+  const std::filesystem::path model_path = FixtureModelPath();
+  if (!std::filesystem::exists(model_path)) {
+    GTEST_SKIP() << "fixture not found at " << model_path << " - see the comment above RunsYolo11nSeg for how to generate it";
+  }
+
+  OnnxRuntimeBackend backend(model_path.string(), InferenceBackendType::kOnnxRuntimeBest);
+  std::unordered_map<std::string, std::string> metadata;
+  EXPECT_NO_THROW(metadata = backend.getMetadata());
 }
 
 // Exercises OnnxRuntimeBackend pinned to a specific execution provider,

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "observatory/inference/IInferenceBackend.hpp"
@@ -52,6 +53,11 @@ namespace observatory::inference
 
     /// @copydoc getInputTensorsDefault
     std::vector<Tensor> getOutputTensorsDefault() override;
+
+    /// @brief Reads the .onnx file's custom metadata_props (written by
+    ///   academy/utils/optimizers/metadata.py) via ONNX Runtime's
+    ///   Ort::ModelMetadata API. Empty if the model has none.
+    std::unordered_map<std::string, std::string> getMetadata() override;
 
   private:
     struct Impl;

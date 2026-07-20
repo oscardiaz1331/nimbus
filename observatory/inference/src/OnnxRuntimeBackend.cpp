@@ -122,6 +122,9 @@ namespace observatory::inference
     /// @copydoc OnnxRuntimeBackend::getOutputTensorsDefault
     std::vector<Tensor> getOutputTensorsDefault();
 
+    /// @copydoc OnnxRuntimeBackend::getMetadata
+    std::unordered_map<std::string, std::string> getMetadata();
+
   private:
     /// @brief Registers every execution provider library shipped next to the
     ///   executable with `env_`. Missing or unloadable libraries are logged
@@ -397,6 +400,23 @@ namespace observatory::inference
   {
     return DescribeTensors(
         session_->GetOutputCount(), [this](size_t i) { return session_->GetOutputTypeInfo(i); }, output_names_);
+  }
+
+  std::unordered_map<std::string, std::string> OnnxRuntimeBackend::Impl::getMetadata()
+  {
+    std::unordered_map<std::string, std::string> metadata;
+    const Ort::ModelMetadata model_metadata = session_->GetModelMetadata();
+    // ModelMetadataLookupCustomMetadataMap sets its output to null (rather
+    // than throwing) for a key that isn't present, so each lookup below is
+    // checked rather than assumed to succeed just because the key came from
+    // GetCustomMetadataMapKeysAllocated() itself.
+    for (const auto &key : model_metadata.GetCustomMetadataMapKeysAllocated(kCpuAllocator))
+    {
+      Ort::AllocatedStringPtr value = model_metadata.LookupCustomMetadataMapAllocated(key.get(), kCpuAllocator);
+      if (value)
+        metadata.emplace(key.get(), value.get());
+    }
+    return metadata;
   }
 
   std::vector<Tensor> OnnxRuntimeBackend::Impl::DescribeTensors(size_t count, const std::function<Ort::TypeInfo(size_t)> &get_type_info,
@@ -680,6 +700,11 @@ namespace observatory::inference
   std::vector<Tensor> OnnxRuntimeBackend::getOutputTensorsDefault()
   {
     return p_impl_->getOutputTensorsDefault();
+  }
+
+  std::unordered_map<std::string, std::string> OnnxRuntimeBackend::getMetadata()
+  {
+    return p_impl_->getMetadata();
   }
 
 } // namespace observatory::inference
