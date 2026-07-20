@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from optimize import _COMMANDS, _checkpoint_candidate_names, _list_images
+from optimize import _COMMANDS, _list_images
+from utils.commons import checkpoint_candidate_names
 
 
 def test_list_images_filters_and_sorts() -> None:
@@ -24,8 +25,8 @@ def test_list_images_filters_and_sorts() -> None:
 def test_checkpoint_candidate_names_match_framework() -> None:
     yolo_cfg = types.SimpleNamespace(framework="yolo")
     rfdetr_cfg = types.SimpleNamespace(framework="rfdetr")
-    assert _checkpoint_candidate_names(yolo_cfg) == ("best.pt", "last.pt")
-    assert _checkpoint_candidate_names(rfdetr_cfg) == ("best.pth", "last.pth")
+    assert checkpoint_candidate_names(yolo_cfg) == ("best.pt", "last.pt")
+    assert checkpoint_candidate_names(rfdetr_cfg) == ("best.pth", "last.pth")
 
 
 def test_all_commands_are_callable() -> None:

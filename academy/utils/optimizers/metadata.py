@@ -17,8 +17,23 @@ def write_metadata(onnx_path: Path, metadata: dict) -> Path:
 
     Non-string values are JSON-encoded so callers don't have to pre-stringify
     lists/dicts (e.g. a class-names list) themselves.
+
+    Idempotent: any existing entry whose key is also in ``metadata`` is
+    replaced rather than duplicated, so calling this more than once on the
+    same file (e.g. once per optimize.py pipeline stage) can't accumulate
+    repeated keys.
     """
     model = onnx.load(str(onnx_path))
+    new_keys = {str(key) for key in metadata}
+    # Extract (key, value) pairs, not the protobuf entries themselves: clearing
+    # the repeated field below can invalidate references into it, so anything
+    # worth keeping has to be copied out as plain values first.
+    kept = [(entry.key, entry.value) for entry in model.metadata_props if entry.key not in new_keys]
+    del model.metadata_props[:]
+    for key, value in kept:
+        entry = model.metadata_props.add()
+        entry.key = key
+        entry.value = value
     for key, value in metadata.items():
         entry = model.metadata_props.add()
         entry.key = str(key)

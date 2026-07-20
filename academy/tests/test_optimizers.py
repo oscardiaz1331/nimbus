@@ -12,14 +12,26 @@ which is an integration test, not a unit self-check.
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from utils.config import (
+    Config,
+    DatasetConfig,
+    Framework,
+    InferenceConfig,
+    ModelConfig,
+    StageConfig,
+    Task,
+    TrainingConfig,
+)
 from utils.optimizers.int8_converter import _ImageCalibrationReader
 from utils.optimizers.metadata import read_metadata, write_metadata
+from utils.optimizers.provenance import collect_export_metadata
 from utils.optimizers.pruner import prune_state_dict
 
 
@@ -47,6 +59,93 @@ def test_metadata_roundtrip() -> None:
         assert result["framework"] == "yolo"
         assert result["imgsz"] == 640
         assert result["classes"] == ["a", "b"]
+
+
+def test_write_metadata_is_idempotent() -> None:
+    """Re-writing overlapping keys must replace, not duplicate, entries —
+    optimize.py calls write_metadata again after every pipeline stage
+    (export/simplify/fp16/int8), all on the same handful of keys."""
+    import onnx
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "model.onnx"
+        onnx.save(_tiny_onnx_model(), str(path))
+
+        write_metadata(path, {"framework": "yolo", "imgsz": 640})
+        write_metadata(path, {"framework": "yolo", "imgsz": 608, "extra": "new"})
+
+        model = onnx.load(str(path))
+        keys = [entry.key for entry in model.metadata_props]
+        assert sorted(keys) == ["extra", "framework", "imgsz"]  # no duplicates
+
+        result = read_metadata(path)
+        assert result["imgsz"] == 608  # second write wins
+        assert result["extra"] == "new"
+
+
+def _make_test_config(dataset_root: str, checkpoint: str | None) -> Config:
+    return Config(
+        task=Task.SEGMENTATION,
+        framework=Framework.YOLO,
+        project_name="test",
+        output_dir="/tmp/does-not-matter",
+        seed=42,
+        dataset=DatasetConfig(root=dataset_root),
+        model=ModelConfig(checkpoint=checkpoint),
+        training=TrainingConfig(stages=[StageConfig(name="only", max_epochs=1, freeze="none")]),
+        inference=InferenceConfig(),
+    )
+
+
+def test_collect_export_metadata_reads_dataset_checkpoint_and_git() -> None:
+    import onnx
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+
+        dataset_root = tmp_path / "dataset"
+        dataset_root.mkdir()
+        (dataset_root / "data.yaml").write_text("names:\n  - cloud\n  - sky\n")
+
+        checkpoint = tmp_path / "best.pt"
+        checkpoint.write_bytes(b"fake-weights-content")
+        expected_hash = hashlib.sha256(b"fake-weights-content").hexdigest()[:16]
+
+        onnx_path = tmp_path / "model.onnx"
+        onnx.save(_tiny_onnx_model(), str(onnx_path))
+
+        cfg = _make_test_config(str(dataset_root), str(checkpoint))
+        metadata = collect_export_metadata(cfg, onnx_path)
+
+        assert metadata["framework"] == "yolo"
+        assert metadata["task"] == "segmentation"
+        assert metadata["nms_embedded"] is True
+        assert metadata["class_names"] == ["cloud", "sky"]
+        assert metadata["num_classes"] == 2
+        assert metadata["checkpoint_sha256"] == expected_hash
+        assert metadata["checkpoint_path"] == str(checkpoint)
+        # Falls back to the folder's own name: nothing in datasets/configs/*.yaml
+        # points its output_dir at this temp directory.
+        assert metadata["dataset_name"] == "dataset"
+        # Best-effort: either a real repo was found (40-char hex commit) or
+        # git genuinely isn't available/configured here - both are valid.
+        assert metadata["git_commit"] == "unknown" or len(metadata["git_commit"]) == 40
+
+
+def test_collect_export_metadata_handles_missing_checkpoint() -> None:
+    import onnx
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        onnx_path = tmp_path / "model.onnx"
+        onnx.save(_tiny_onnx_model(), str(onnx_path))
+
+        cfg = _make_test_config(str(tmp_path / "no-such-dataset"), checkpoint=None)
+        metadata = collect_export_metadata(cfg, onnx_path)
+
+        assert metadata["checkpoint_sha256"] == "unknown"
+        assert metadata["class_names"] == []
+        assert metadata["num_classes"] == 0
 
 
 def test_calibration_reader_exhausts() -> None:
@@ -105,6 +204,9 @@ def test_prune_state_dict_rejects_bad_amount() -> None:
 
 if __name__ == "__main__":
     test_metadata_roundtrip()
+    test_write_metadata_is_idempotent()
+    test_collect_export_metadata_reads_dataset_checkpoint_and_git()
+    test_collect_export_metadata_handles_missing_checkpoint()
     test_calibration_reader_exhausts()
     test_prune_state_dict_zeroes_smallest_magnitude()
     test_prune_state_dict_rejects_bad_amount()

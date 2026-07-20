@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
+from utils.commons import checkpoint_candidate_names
 from utils.models import get_adapter
 from utils.config import Config
 from utils.paths import resolve_checkpoint, weights_dir
@@ -45,8 +46,15 @@ def _require(path: Path, hint: str) -> Path:
     return path
 
 
-def _checkpoint_candidate_names(cfg: Config) -> tuple[str, ...]:
-    return ("best.pt", "last.pt") if cfg.framework == "yolo" else ("best.pth", "last.pth")
+def _embed_metadata(cfg: Config, target: Path) -> None:
+    """(re)embed provenance metadata into ``target``. Called after every
+    stage that writes an onnx file, not just once after `export` — see
+    utils/optimizers/metadata.write_metadata's docstring for why.
+    """
+    from utils.optimizers.metadata import write_metadata
+    from utils.optimizers.provenance import collect_export_metadata
+
+    write_metadata(target, collect_export_metadata(cfg, target))
 
 
 def cmd_simplify(cfg: Config, session: Session) -> None:
@@ -54,6 +62,7 @@ def cmd_simplify(cfg: Config, session: Session) -> None:
 
     _require(session.onnx, "Export the checkpoint to ONNX first, Run `export`.")
     onnx_simplifier.simplify(session.onnx)
+    _embed_metadata(cfg, session.onnx)
     print(f"simplified: {session.onnx}")
 
 
@@ -62,6 +71,7 @@ def cmd_fp16(cfg: Config, session: Session) -> None:
 
     _require(session.onnx, "Run `simplify` (or export) first.")
     fp16_converter.convert_fp16(session.onnx, session.fp16)
+    _embed_metadata(cfg, session.fp16)
     print(f"fp16: {session.fp16}")
 
 
@@ -78,12 +88,13 @@ def cmd_int8(cfg: Config, session: Session) -> None:
         cfg.inference.imgsz,
         normalize_imagenet=(cfg.framework == "rfdetr"),
     )
+    _embed_metadata(cfg, session.int8)
     print(f"int8: {session.int8}")
 
 
 def cmd_prune(cfg: Config, session: Session, amount: float = 0.3) -> None:
     adapter = get_adapter(cfg)
-    checkpoint = resolve_checkpoint(cfg, _checkpoint_candidate_names(cfg))
+    checkpoint = resolve_checkpoint(cfg, checkpoint_candidate_names(cfg))
     output = checkpoint.parent / f"{checkpoint.stem}-pruned{checkpoint.suffix}"
     adapter.prune(checkpoint, output, amount)
     print(f"pruned checkpoint: {output}")
@@ -217,7 +228,7 @@ def cmd_report(cfg: Config, session: Session) -> None:
     rows = _run_benchmark(cfg, session)
     accuracy_keys = sorted({k for r in rows for k in r.accuracy})
     try:
-        checkpoint = str(resolve_checkpoint(cfg, _checkpoint_candidate_names(cfg)))
+        checkpoint = str(resolve_checkpoint(cfg, checkpoint_candidate_names(cfg)))
     except FileNotFoundError:
         checkpoint = cfg.model.checkpoint or "(unresolved)"
 
@@ -242,7 +253,9 @@ def cmd_export(cfg: Config, session: Session) -> None:
     """Export the checkpoint to ONNX with post-processing wrapper."""
     adapter = get_adapter(cfg)
     adapter.export_onnx(session.onnx)
-    
+    _embed_metadata(cfg, session.onnx)
+
+
 def cmd_pipeline(cfg: Config, session: Session) -> None:
     """export -> simplify -> fp16 -> int8 -> report. Matches the design's flowchart; prune is opt-in, not automatic."""
     cmd_export(cfg, session)

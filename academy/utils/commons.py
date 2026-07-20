@@ -42,6 +42,12 @@ def get_device() -> str:
         return "cpu"
 
 
+def checkpoint_candidate_names(cfg) -> tuple[str, ...]:
+    """Default checkpoint filenames to search for when ``cfg.model.checkpoint``
+    isn't set explicitly, per framework's native save format."""
+    return ("best.pt", "last.pt") if cfg.framework == "yolo" else ("best.pth", "last.pth")
+
+
 def load_class_names(dataset_yaml: Path) -> dict[int, str]:
     """Read a YOLO-format dataset descriptor and return ``{class_id: name}``."""
     with open(dataset_yaml, "r", encoding="utf-8") as f:
