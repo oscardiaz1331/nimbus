@@ -19,7 +19,10 @@ namespace observatory::configuration
         // The "onnx-" prefix leaves "tensorrt"/"openvino" free for future
         // backends that talk to those runtimes directly instead of through
         // ONNX Runtime's EP mechanism (see InferenceBackendType::kTensorRT/
-        // kOpenVINO).
+        // kOpenVINO). "opencv" runs the model through OpenCVBackend
+        // (cv::dnn, CPU only) instead - see its class doc comment for why
+        // that one still needs an internal ONNX Runtime session too (never
+        // run, only for metadata/shape introspection).
         std::string backend = "onnx";
 
         // Score/IoU thresholds for postprocessing (see

@@ -32,6 +32,36 @@ def convert_fp16(onnx_path: Path, output_path: Path, *, keep_io_types: bool = Tr
     # unboundedly). Blocking by exact node name sidesteps this entirely: the
     # newly-generated wrapper nodes get distinct names and never re-match.
     cast_node_names = [n.name for n in model.graph.node if n.op_type == "Cast"]
+
+    # Names of Constant nodes that feed directly into an op in
+    # DEFAULT_OP_BLOCK_LIST (Resize, TopK, NonMaxSuppression, ...). Those ops
+    # require float32/int64 inputs even though onnxconverter-common's
+    # op_block_list only protects the *blocked node's own* attributes, not an
+    # upstream Constant node producing one of its inputs (Ultralytics'
+    # export represents Resize's scale factors that way, not as a plain
+    # initializer - process_initializers() already protects true
+    # initializers feeding a blocked node, just not Constant-node outputs).
+    # Converting that Constant to fp16 anyway produces a graph ONNX Runtime
+    # rejects at load time ("Type 'tensor(float16)' of input parameter ...
+    # of operator (Resize) ... is invalid"). The block list's own Cast-
+    # wrapping safety net (insert_cast32_before_node) can't catch this
+    # either: it only wraps inputs that already have a graph.value_info
+    # entry, which requires the shape-inference pass this call deliberately
+    # skips.
+    #
+    # Blocked by NODE NAME, not by adding "Constant" to op_block_list:
+    # plenty of *other* Constant nodes feed ordinary ops (e.g. an attention
+    # block's 1/sqrt(d) scale factor into a Mul) and need converting in
+    # lockstep with the rest of the graph - blanket-blocking every Constant
+    # left those with one fp16 and one stale-fp32 operand instead, a
+    # different type-mismatch error at load time.
+    blocked_op_inputs = {
+        input_name for node in model.graph.node if node.op_type in float16.DEFAULT_OP_BLOCK_LIST for input_name in node.input
+    }
+    protected_constant_names = [
+        node.name for node in model.graph.node if node.op_type == "Constant" and node.output[0] in blocked_op_inputs
+    ]
+
     # disable_shape_infer=True skips onnxconverter-common's internal shape-inference
     # pass, which is what makes this slow on big graphs (DINOv2/RF-DETR-sized models
     # in particular). Nothing downstream reads value_info off the fp16 model — int8
@@ -40,7 +70,7 @@ def convert_fp16(onnx_path: Path, output_path: Path, *, keep_io_types: bool = Tr
     fp16_model = float16.convert_float_to_float16(
         model,
         keep_io_types=keep_io_types,
-        node_block_list=cast_node_names,
+        node_block_list=[*cast_node_names, *protected_constant_names],
         disable_shape_infer=True,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)

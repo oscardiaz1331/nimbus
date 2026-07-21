@@ -1,5 +1,6 @@
 add_library(observatory_inference STATIC
   src/OnnxRuntimeBackend.cpp
+  src/OpenCVBackend.cpp
   src/Tensor.cpp
   src/YoloModel.cpp
 )

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "observatory/inference/OnnxRuntimeBackend.hpp"
+#include "observatory/inference/OpenCVBackend.hpp"
 #include "observatory/inference/YoloModel.hpp"
 #include "observatory/postprocessing/YoloSegPostprocessor.hpp"
 #include "observatory/preprocessing/YoloSegPreprocessor.hpp"
@@ -25,8 +26,10 @@ namespace observatory::configuration
                 return inference::InferenceBackendType::kOnnxRuntimeTensorRT;
             if (backend == "onnx-openvino")
                 return inference::InferenceBackendType::kOnnxRuntimeOpenVINO;
+            if (backend == "opencv")
+                return inference::InferenceBackendType::kOpenCV;
             return std::unexpected(std::format(
-                "PipelineFactory: unknown backend \"{}\" (expected one of onnx/onnx-cpu/onnx-cuda/onnx-tensorrt/onnx-openvino).", backend));
+                "PipelineFactory: unknown backend \"{}\" (expected one of onnx/onnx-cpu/onnx-cuda/onnx-tensorrt/onnx-openvino/opencv).", backend));
         }
 
         // Builds the YOLO triplet once ResolveFramework() has already said
@@ -82,9 +85,9 @@ namespace observatory::configuration
 
         // Built once, as the backend-agnostic interface: which concrete
         // model wrapper owns it is decided below, from the model's own metadata, not hardcoded
-        // here - both families export to plain ONNX and run through the same
-        // OnnxRuntimeBackend, they only disagree on how to interpret the
-        // tensors.
+        // here - every family exports to plain ONNX and runs through
+        // whichever IInferenceBackend was requested, they only disagree on
+        // how to interpret the tensors.
         std::unique_ptr<inference::IInferenceBackend> backend;
         switch (*backend_type)
         {
@@ -97,6 +100,18 @@ namespace observatory::configuration
             try
             {
                 backend = std::make_unique<inference::OnnxRuntimeBackend>(config.model_path, *backend_type);
+            }
+            catch (const std::exception &ex)
+            {
+                return std::unexpected(std::format("PipelineFactory: failed to load model \"{}\": {}", config.model_path, ex.what()));
+            }
+            break;
+        }
+        case inference::InferenceBackendType::kOpenCV:
+        {
+            try
+            {
+                backend = std::make_unique<inference::OpenCVBackend>(config.model_path);
             }
             catch (const std::exception &ex)
             {

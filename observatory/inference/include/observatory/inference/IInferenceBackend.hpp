@@ -15,6 +15,7 @@ enum class InferenceBackendType {
   kOnnxRuntimeCUDA,
   kOnnxRuntimeOpenVINO,
   kOnnxRuntimeTensorRT,
+  kOpenCV,
   kTensorRT,
   kOpenVINO
 };

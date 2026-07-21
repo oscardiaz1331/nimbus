@@ -85,5 +85,20 @@ TEST(PipelineFactory, BuildsFromRealFixture) {
   EXPECT_NE(result->postprocessor, nullptr);
 }
 
+// OpenCVBackend goes through a different branch of buildPipeline() than the
+// ONNX Runtime ones (see PipelineFactory.cpp) - this just checks that branch
+// is reachable and fails cleanly (not by ParseBackend's "unknown backend"
+// path) when the model can't be loaded. Whether it fails or succeeds against
+// a *real* model is exercised in inference/tests/OpenCVBackend_test.cpp.
+TEST(PipelineFactory, OpenCVBackendFailsCleanlyOnMissingModelFile) {
+  Config config;
+  config.model_path = "/nonexistent/path/model.onnx";
+  config.backend = "opencv";
+
+  const auto result = buildPipeline(config);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().find("unknown backend"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace observatory::configuration

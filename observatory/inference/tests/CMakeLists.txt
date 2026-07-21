@@ -2,6 +2,7 @@ add_executable(observatory_inference_tests
   IInferenceModel_test.cpp
   IInferenceBackend_test.cpp
   OnnxRuntimeBackend_test.cpp
+  OpenCVBackend_test.cpp
   YoloModel_test.cpp
   Tensor_test.cpp
 )
