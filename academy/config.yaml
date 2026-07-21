@@ -9,7 +9,7 @@ project:
   seed: 42
 
 task: "segmentation"      # "segmentation" | "classification"
-framework: "rfdetr"         # "yolo" | "rfdetr"  (rfdetr supports segmentation only)
+framework: "yolo"         # "yolo" | "rfdetr"  (rfdetr supports segmentation only)
 
 dataset:
   root:  "datasets/merged_yolo"  # Use dataset builder to create a YOLO-ready dataset from the original SwimNSeg and 16647156 dataset.
@@ -17,10 +17,11 @@ dataset:
   test_split: "test"
 
 model:
-  checkpoint: finetuned_checkpoints/rf-detr-m.pth # set for resume / inference; null = start from the base variant below
+  checkpoint: finetuned_checkpoints/yolo-11-s.pt # set for resume / inference; null = start from the base variant below
   yolo:
-    variant: "yolo11n-seg"     
+    variant: "yolo11s-seg"
     imgsz: 608
+    export_nms: false
   rfdetr:
     variant: "medium"               # "nano" | "small" | "medium"
     segmentation: true             # explicit task toggle requested by the spec

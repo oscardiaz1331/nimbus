@@ -36,7 +36,11 @@ class YoloAdapter:
                 format="onnx",
                 imgsz=self.cfg.inference.imgsz,
                 simplify=False,  # onnxsim runs as its own later pipeline stage, not duplicated here
-                nms=True,  # bakes NMS into the graph so output0 is (1, 300, 4+1+1+nm) already top-K filtered, matching utils/benchmark/onnx_decode.py's decoder
+                # model.yolo.export_nms: True bakes NMS into the graph so output0 is
+                # (1, 300, 4+1+1+nm), already top-K filtered, matching
+                # utils/benchmark/onnx_decode.py's decoder; False exports raw
+                # (postprocessing-free) predictions instead.
+                nms=self.cfg.model.yolo.export_nms,
             )
         shutil.move(str(exported), target)
 

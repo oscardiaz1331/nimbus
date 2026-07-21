@@ -91,6 +91,7 @@ class DatasetConfig:
 class YoloModelConfig:
     variant: str = "yolo11m-seg"
     imgsz: int = 608
+    export_nms: bool = True  # bake NMS into the exported ONNX graph vs. raw (postprocessing-free) predictions
 
 
 @dataclasses.dataclass

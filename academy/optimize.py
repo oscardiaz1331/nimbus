@@ -185,10 +185,18 @@ def _run_benchmark(cfg: Config, session: Session) -> list[BenchmarkRow]:
                 sess.run(None, {input_name: dummy})
 
             if eval_samples:
-                predict_mask = onnx_decode.make_predict_mask(
-                    cfg.framework, sess, model_imgsz, cfg.inference.conf_threshold, num_classes
-                )
-                evaluate = lambda predict_mask=predict_mask: evaluator.evaluate(eval_samples, predict_mask)
+                # onnx_decode's YOLO decoder assumes the NMS-embedded output layout
+                # (see its module docstring) -- with model.yolo.export_nms: false the
+                # graph emits raw predictions it can't read, so skip accuracy eval
+                # for those variants instead of misdecoding them.
+                if cfg.framework == "yolo" and not cfg.model.yolo.export_nms:
+                    print(f"skipping accuracy eval for {variant_name}-{device_label}: model.yolo.export_nms is False")
+                    evaluate = lambda: {}
+                else:
+                    predict_mask = onnx_decode.make_predict_mask(
+                        cfg.framework, sess, model_imgsz, cfg.inference.conf_threshold, num_classes
+                    )
+                    evaluate = lambda predict_mask=predict_mask: evaluator.evaluate(eval_samples, predict_mask)
             else:
                 evaluate = lambda: {}
 

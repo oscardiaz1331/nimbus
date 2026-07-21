@@ -130,9 +130,10 @@ def collect_export_metadata(cfg: Config, onnx_path: Path) -> dict[str, Any]:
         "task": cfg.task.value,
         "variant": cfg.variant,
         "imgsz": _graph_input_size(model),
-        # Ultralytics YOLO export always bakes NMS in (see YoloAdapter.export_onnx);
-        # RF-DETR's query-based decoding has no separate NMS stage at all.
-        "nms_embedded": cfg.framework.value == "yolo",
+        # Ultralytics YOLO export bakes NMS in iff model.yolo.export_nms (see
+        # YoloAdapter.export_onnx); RF-DETR's query-based decoding has no
+        # separate NMS stage at all regardless of config.
+        "nms_embedded": cfg.framework.value == "yolo" and cfg.model.yolo.export_nms,
         "onnx_opset": model.opset_import[0].version if model.opset_import else None,
         "num_classes": len(class_names),
         "class_names": class_names,
