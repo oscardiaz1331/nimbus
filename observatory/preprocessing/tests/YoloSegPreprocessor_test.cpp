@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include <opencv5/opencv2/core.hpp>
+#include <opencv2/core.hpp>
 
 namespace observatory::preprocessing {
 namespace {

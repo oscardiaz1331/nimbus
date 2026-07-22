@@ -41,6 +41,11 @@ namespace observatory::inference
         /// @brief Checks if the given model file is a valid ONNX model file.
         static bool IsModelFileValid(const std::filesystem::path &model_file);
 
+        /// @brief Widens `path` to Ort::Session's required ORTCHAR_T (wchar_t
+        ///   on Windows, char elsewhere) - mirrors OnnxRuntimeBackend.cpp's
+        ///   ToOrtFileString.
+        static std::basic_string<ORTCHAR_T> ToOrtFileString(const std::filesystem::path &path);
+
         /// @brief Maps a backend-agnostic TensorDataType to its cv::Mat depth
         ///   equivalent (CV_32F / CV_64S / CV_8U).
         static int ToCvDepth(TensorDataType dtype);
@@ -119,7 +124,7 @@ namespace observatory::inference
             // construction time.
             session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
             session_options.SetIntraOpNumThreads(1);
-            ort_session_ = std::make_unique<Ort::Session>(*ort_env_, model_path.c_str(), session_options);
+            ort_session_ = std::make_unique<Ort::Session>(*ort_env_, ToOrtFileString(model_path).c_str(), session_options);
         }
         catch (const Ort::Exception &ex)
         {
@@ -237,6 +242,12 @@ namespace observatory::inference
     bool OpenCVBackend::Impl::IsModelFileValid(const std::filesystem::path &model_file)
     {
         return std::filesystem::is_regular_file(model_file) && model_file.extension() == ".onnx";
+    }
+
+    std::basic_string<ORTCHAR_T> OpenCVBackend::Impl::ToOrtFileString(const std::filesystem::path &path)
+    {
+        const std::string string(path.string());
+        return {string.begin(), string.end()};
     }
 
     int OpenCVBackend::Impl::ToCvDepth(const TensorDataType dtype)

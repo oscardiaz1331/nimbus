@@ -3,7 +3,7 @@
 #include <expected>
 #include <string>
 
-#include <opencv5/opencv2/core.hpp>
+#include <opencv2/core.hpp>
 
 namespace observatory::camera {
 

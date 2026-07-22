@@ -14,7 +14,9 @@ target_link_libraries(observatory PRIVATE
 )
 
 observatory_set_warnings(observatory)
+observatory_copy_opencv_dlls(observatory)
 observatory_copy_onnxruntime_dlls(observatory)
+observatory_copy_tensorrt_rtx_dlls(observatory)
 
 add_executable(observatory_benchmark
   src/benchmark.cpp
@@ -25,4 +27,6 @@ target_link_libraries(observatory_benchmark PRIVATE
 )
 
 observatory_set_warnings(observatory_benchmark)
+observatory_copy_opencv_dlls(observatory_benchmark)
 observatory_copy_onnxruntime_dlls(observatory_benchmark)
+observatory_copy_tensorrt_rtx_dlls(observatory_benchmark)

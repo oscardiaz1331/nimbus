@@ -1,0 +1,11 @@
+{
+  "name": "observatory",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "eigen3",
+      "platform": "windows"
+    }
+  ],
+  "builtin-baseline": "42ee70e43e604a34e4b5b68850dc80d3743fd780"
+}

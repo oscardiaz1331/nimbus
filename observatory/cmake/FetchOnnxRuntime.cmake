@@ -1,6 +1,6 @@
 include(FetchContent)
 
-set(OBSERVATORY_ONNXRUNTIME_VERSION "1.27.0" CACHE STRING "ONNX Runtime release to fetch")
+set(OBSERVATORY_ONNXRUNTIME_VERSION "1.27.1" CACHE STRING "ONNX Runtime release to fetch")
 
 if(WIN32)
   set(_observatory_ort_os "win")

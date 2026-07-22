@@ -2,7 +2,7 @@
 
 #include <format>
 
-#include <opencv5/opencv2/core/persistence.hpp>
+#include <opencv2/core/persistence.hpp>
 
 namespace observatory::configuration
 {

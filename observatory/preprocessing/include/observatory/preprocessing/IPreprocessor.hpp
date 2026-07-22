@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include <opencv5/opencv2/core.hpp>
+#include <opencv2/core.hpp>
 
 #include "observatory/inference/Tensor.hpp"
 

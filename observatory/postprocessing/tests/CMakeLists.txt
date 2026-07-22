@@ -5,4 +5,7 @@ target_link_libraries(observatory_postprocessing_tests PRIVATE
   observatory::postprocessing
   GTest::gtest_main
 )
+observatory_copy_opencv_dlls(observatory_postprocessing_tests)
+observatory_copy_onnxruntime_dlls(observatory_postprocessing_tests)
+observatory_copy_tensorrt_rtx_dlls(observatory_postprocessing_tests)
 gtest_discover_tests(observatory_postprocessing_tests)

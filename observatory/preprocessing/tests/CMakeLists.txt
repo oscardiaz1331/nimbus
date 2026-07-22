@@ -6,4 +6,7 @@ target_link_libraries(observatory_preprocessing_tests PRIVATE
   observatory::preprocessing
   GTest::gtest_main
 )
+observatory_copy_opencv_dlls(observatory_preprocessing_tests)
+observatory_copy_onnxruntime_dlls(observatory_preprocessing_tests)
+observatory_copy_tensorrt_rtx_dlls(observatory_preprocessing_tests)
 gtest_discover_tests(observatory_preprocessing_tests)

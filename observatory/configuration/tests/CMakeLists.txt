@@ -13,5 +13,7 @@ target_link_libraries(observatory_configuration_tests PRIVATE
   observatory::configuration
   GTest::gtest_main
 )
+observatory_copy_opencv_dlls(observatory_configuration_tests)
 observatory_copy_onnxruntime_dlls(observatory_configuration_tests)
+observatory_copy_tensorrt_rtx_dlls(observatory_configuration_tests)
 gtest_discover_tests(observatory_configuration_tests)

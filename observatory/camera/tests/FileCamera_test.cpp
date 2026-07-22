@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include <opencv5/opencv2/imgcodecs.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 namespace observatory::camera {
 namespace {

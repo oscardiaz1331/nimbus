@@ -1,7 +1,7 @@
 #include "observatory/postprocessing/YoloSegPostprocessor.hpp"
 
-#include <opencv5/opencv2/dnn/dnn.hpp>
-#include <opencv5/opencv2/imgproc.hpp>
+#include <opencv2/dnn/dnn.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <format>
 #include <ranges>

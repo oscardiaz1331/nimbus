@@ -20,8 +20,10 @@ option(OBSERVATORY_ENABLE_CUDA "Fetch/link the CUDA-enabled ONNX Runtime build" 
 option(OBSERVATORY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 find_package(OpenCV REQUIRED)
-find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
+include(CopyOpenCVDlls)
+include(CopyTensorRtRtxDlls)
 include(FetchOnnxRuntime)
 
 if(OBSERVATORY_BUILD_TESTS)

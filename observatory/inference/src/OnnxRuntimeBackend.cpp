@@ -28,19 +28,23 @@ namespace observatory::inference
   namespace
   {
 
-    /// @brief Maps an InferenceBackendType to the registration name used in
-    ///   Impl::RegisterExecutionProviders(). Empty for the values that don't
-    ///   pin a specific registered library (kOnnxRuntimeBest picks
-    ///   automatically, kOnnxRuntimeCPU needs no registration, and
-    ///   kTensorRT / kOpenVINO aren't ONNX Runtime EPs at all).
+    /// @brief Maps an InferenceBackendType to the EpName() that ONNX Runtime
+    ///   reports for it via GetEpDevices() - NOT the (arbitrary) registration
+    ///   handle Impl::RegisterExecutionProviders() picks when calling
+    ///   RegisterExecutionProviderLibrary(); those are two independent
+    ///   strings that just happen to coincide for TensorRT below. Empty for
+    ///   the values that don't pin a specific registered library
+    ///   (kOnnxRuntimeBest picks automatically, kOnnxRuntimeCPU needs no
+    ///   registration, and kTensorRT / kOpenVINO aren't ONNX Runtime EPs at
+    ///   all).
     constexpr std::string_view EpRegistrationName(const InferenceBackendType ep_type)
     {
       switch (ep_type)
       {
       case InferenceBackendType::kOnnxRuntimeCUDA:
-        return "cuda";
+        return "CUDAExecutionProvider";
       case InferenceBackendType::kOnnxRuntimeOpenVINO:
-        return "openvino";
+        return "OpenVINOExecutionProvider";
       case InferenceBackendType::kOnnxRuntimeTensorRT:
         // NVIDIA's TensorRT RTX EP plugin is built from a separate repo, not
         // shipped by ONNX Runtime itself, and reports this exact string as
@@ -298,7 +302,7 @@ namespace observatory::inference
     Ort::SessionOptions session_options;
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     SelectExecutionProvider(session_options, ep_type);
-    session_ = std::make_unique<Ort::Session>(*env_, model_path.c_str(), session_options);
+    session_ = std::make_unique<Ort::Session>(*env_, ToOrtFileString(model_path).c_str(), session_options);
     if (session_->GetInputCount() == 0 || session_->GetOutputCount() == 0)
       throw std::runtime_error("OnnxRuntimeBackend: session has no input or output tensors");
 

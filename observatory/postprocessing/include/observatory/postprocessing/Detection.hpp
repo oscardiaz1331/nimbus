@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <opencv5/opencv2/core.hpp>
+#include <opencv2/core.hpp>
 
 namespace observatory::postprocessing
 {
