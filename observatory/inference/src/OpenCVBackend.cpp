@@ -99,7 +99,7 @@ namespace observatory::inference
         // actually run this particular graph today.
         try
         {
-            net_ = cv::dnn::readNetFromONNX(model_path, cv::dnn::ENGINE_CLASSIC);
+            net_ = cv::dnn::readNetFromONNX(model_path, cv::dnn::ENGINE_AUTO);
             if (net_.empty())
                 throw std::runtime_error("OpenCVBackend: \"" + model_path + "\" produced an empty cv::dnn::Net");
             net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
