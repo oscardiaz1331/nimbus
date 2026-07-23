@@ -202,9 +202,16 @@ namespace observatory::postprocessing
                 detection.box = candidate_boxes[candidate_idx];
                 detection.score = candidate_scores[candidate_idx];
                 detection.class_id = candidate_class_ids[candidate_idx];
-                // Coeffs are contiguous in dets_view's last dimension.
-                const float *coeff_ptr = &dets_view[batch_id, coeff_channel, anchor_id];
-                detection.mask_coeffs.assign(coeff_ptr, coeff_ptr + nm);
+                // Channel-first layout: coeffs for one anchor are NOT
+                // contiguous (that's only true of processDetsWithNMS's
+                // detection-first layout). Each coeff channel is num_anchors
+                // floats apart, so it has to be gathered one channel at a
+                // time instead of read as a contiguous run.
+                detection.mask_coeffs.resize(static_cast<std::size_t>(nm));
+                for (int c = 0; c < nm; ++c)
+                {
+                    detection.mask_coeffs[static_cast<std::size_t>(c)] = dets_view[batch_id, coeff_channel + c, anchor_id];
+                }
                 batch_detections.push_back(std::move(detection));
             }
 

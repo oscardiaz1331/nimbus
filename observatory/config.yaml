@@ -4,7 +4,7 @@
 # for the full field list and defaults.
 
 # Path to the .onnx model to load.
-model_path: "../academy/finetuned_checkpoints/model.onnx" #"models/yolo11s_fp16-no-nms.onnx" #"models/model.onnx"
+model_path: "../academy/runs/yolo/yolo11s-seg/optimize/model.onnx" #"../academy/finetuned_checkpoints/model.onnx" #"models/yolo11s_fp16-no-nms.onnx" #"models/model.onnx"
 
 # "onnx-cpu" pins ONNX Runtime's CPU execution provider - always available,
 # no GPU/driver required. Other options: "onnx" (auto EP selection),
@@ -16,4 +16,4 @@ backend: "onnx-tensorrt"
 # Postprocessing thresholds (score / NMS IoU) - not derivable from the
 # model itself, see PipelineFactory.cpp.
 conf_threshold: 0.25
-nms_threshold: 0.45
+nms_threshold: 0.8
